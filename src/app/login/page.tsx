@@ -3,20 +3,27 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
+  Card, CardContent, CardDescription, CardHeader, CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 
+import { hasPermission } from "@/lib/permissions";
+
+const ROLE_HOME: { permission: Parameters<typeof hasPermission>[1]; path: string }[] = [
+  { permission: "view_dashboard", path: "/dashboard" },
+  { permission: "view_projects",  path: "/projects" },
+  { permission: "view_clients",   path: "/clients" },
+  { permission: "view_invoices",  path: "/invoices" },
+  { permission: "view_members",   path: "/members" },
+  { permission: "view_po",        path: "/po" },
+];
+
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("admin@commence.com");
-  const [password, setPassword] = useState("password123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -32,9 +39,16 @@ export default function LoginPage() {
     });
 
     if (res.ok) {
-      router.push("/dashboard");
+      const data = await res.json();
+      const role = data.user?.role;
+      const home = ROLE_HOME.find((r) => hasPermission(role, r.permission))?.path ?? "/projects";
+      router.push(home);
+      router.refresh();
     } else {
-      setError("Invalid email or password.");
+      const text = await res.text();
+      let msg = "Invalid credentials.";
+      try { msg = JSON.parse(text).error ?? msg; } catch { /* empty body */ }
+      setError(msg);
     }
     setLoading(false);
   };
@@ -42,32 +56,34 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="w-full max-w-md px-4">
-        {/* Brand */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-[#0F6E56] mb-4">
-            <span className="text-white font-bold text-lg">C</span>
-          </div>
-          <h2 className="text-2xl font-bold text-gray-900">Commence PM</h2>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="https://commencesolutions.com/wp-content/uploads/2025/08/commence-logo.svg"
+            alt="Commence Solutions"
+            className="h-10 w-auto mx-auto mb-4"
+            onError={(e) => {
+              (e.target as HTMLImageElement).style.display = "none";
+            }}
+          />
           <p className="text-sm text-gray-500 mt-1">Project Management Portal</p>
         </div>
 
         <Card className="shadow-sm">
           <CardHeader className="pb-4">
             <CardTitle className="text-lg">Sign in to your account</CardTitle>
-            <CardDescription>
-              Use the test credentials pre-filled below.
-            </CardDescription>
+            <CardDescription>Use your email or username to sign in.</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-1.5">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email">Email or Username</Label>
                 <Input
                   id="email"
-                  type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
+                  autoComplete="username"
                 />
               </div>
               <div className="space-y-1.5">
@@ -78,6 +94,7 @@ export default function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
+                  autoComplete="current-password"
                 />
               </div>
 

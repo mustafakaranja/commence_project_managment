@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DollarSign, FolderKanban, Users } from "lucide-react";
@@ -14,6 +15,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
+import { useAuth } from "@/lib/auth-context";
 
 interface DashboardData {
   totalRevenue: number;
@@ -23,8 +25,17 @@ interface DashboardData {
 }
 
 export default function DashboardPage() {
+  const router = useRouter();
+  const { can, loading: authLoading } = useAuth();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!authLoading && !can("view_dashboard")) {
+      router.replace("/projects");
+      return;
+    }
+  }, [authLoading, can, router]);
 
   useEffect(() => {
     fetch("/api/dashboard")

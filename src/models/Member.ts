@@ -1,18 +1,32 @@
 import mongoose, { Schema, Document, Model } from "mongoose";
 
+export type MemberRole = "admin" | "account_manager" | "manager" | "developer" | "HR" | "LT" | "user";
+
 export interface IMember extends Document {
-  name: string;
-  email?: string;
-  role?: string;
+  fullName: string;
+  designation?: string;
+  username: string;
+  email: string;
+  passwordHash: string;
+  role: MemberRole;
+  portalAccess: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
 
 const MemberSchema = new Schema<IMember>(
   {
-    name: { type: String, required: true, trim: true },
-    email: { type: String, trim: true },
-    role: { type: String, trim: true },
+    fullName: { type: String, required: true, trim: true },
+    designation: { type: String, trim: true },
+    username: { type: String, required: true, unique: true, trim: true },
+    email: { type: String, required: true, unique: true, trim: true, lowercase: true },
+    passwordHash: { type: String, required: true },
+    role: {
+      type: String,
+      enum: ["admin", "account_manager", "manager", "developer", "HR", "LT", "user"],
+      default: "user",
+    },
+    portalAccess: { type: Boolean, default: true },
   },
   { timestamps: true }
 );
