@@ -1,3 +1,5 @@
+import type { ExpenseFor, ExpenseType } from "@/models/Expense";
+
 type ExpenseBody = {
   name?: string;
   description?: string;
@@ -35,16 +37,17 @@ export function validateExpenseBody(body: ExpenseBody): string | null {
 }
 
 export function toExpenseFields(body: ExpenseBody) {
-  const expenseFor = body.expenseFor === "Client" ? "Client" : "Organization";
+  const type: ExpenseType = body.type === "Recurring" ? "Recurring" : "Fixed";
+  const expenseFor: ExpenseFor = body.expenseFor === "Client" ? "Client" : "Organization";
   return {
-    name: body.name,
+    name: String(body.name),
     description: body.description ?? "",
     amount: Number(body.amount),
     taxAmount: Number(body.taxAmount ?? 0),
-    type: body.type,
+    type,
     expenseFor,
     clientId: expenseFor === "Client" ? body.clientId : null,
     reimbursed: Boolean(body.reimbursed),
-    expenseDate: new Date(body.expenseDate as string),
+    expenseDate: new Date(String(body.expenseDate)),
   };
 }

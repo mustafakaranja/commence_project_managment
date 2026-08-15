@@ -1,4 +1,4 @@
-export type RecurringBy = "Monthly" | "Yearly";
+import type { ITask, RecurringBy } from "@/models/Project";
 
 type ProjectBody = {
   title?: string;
@@ -6,7 +6,7 @@ type ProjectBody = {
   clientId?: string;
   members?: string[];
   estimationDeadline?: string;
-  tasks?: unknown[];
+  tasks?: ITask[];
   recurringBy?: string;
   recurringDuration?: number | string;
   renewalDate?: string;
@@ -37,11 +37,11 @@ export function toProjectFields(body: ProjectBody) {
   const type = body.type || "Fixed";
   const isRecurring = type === "Recurring";
   const base = {
-    title: body.title,
+    title: String(body.title),
     type,
     clientId: body.clientId,
     members: body.members ?? [],
-    estimationDeadline: new Date(body.estimationDeadline as string),
+    estimationDeadline: new Date(String(body.estimationDeadline)),
     tasks: body.tasks ?? [],
   };
   if (!isRecurring) return base;
@@ -49,7 +49,7 @@ export function toProjectFields(body: ProjectBody) {
     ...base,
     recurringBy: body.recurringBy as RecurringBy,
     recurringDuration: Number(body.recurringDuration),
-    renewalDate: new Date(body.renewalDate as string),
+    renewalDate: new Date(String(body.renewalDate)),
   };
 }
 

@@ -47,6 +47,7 @@ function generatePassword() {
 
 const ROLE_COLORS: Record<Role, string> = {
   admin: "bg-purple-100 text-purple-700",
+  director: "bg-emerald-100 text-emerald-700",
   account_manager: "bg-blue-100 text-blue-700",
   manager: "bg-indigo-100 text-indigo-700",
   developer: "bg-cyan-100 text-cyan-700",
