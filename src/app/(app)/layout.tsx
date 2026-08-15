@@ -6,7 +6,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     <AuthProvider>
       <div className="flex h-screen overflow-hidden bg-gray-50">
         <Sidebar />
-        <main className="flex-1 min-w-0 overflow-y-auto">
+        <main className="flex-1 min-w-0 min-h-0 overflow-y-auto flex flex-col">
           {children}
         </main>
       </div>

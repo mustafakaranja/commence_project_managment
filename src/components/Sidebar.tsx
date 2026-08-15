@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  LayoutDashboard, FolderKanban, Users, FileText, FileCheck, UserCheck, Wallet, LogOut,
+  LayoutDashboard, FolderKanban, Users, FileText, FileCheck, UserCheck, Wallet, ScrollText, LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
@@ -17,7 +17,8 @@ const navItems: { label: string; href: string; icon: React.ElementType; permissi
   { label: "Members",    href: "/members",   icon: UserCheck,       permission: "view_members" },
   { label: "Invoices",   href: "/invoices",  icon: FileText,        permission: "view_invoices" },
   { label: "Expenses",   href: "/expenses",  icon: Wallet,          permission: "view_expenses" },
-  { label: "PO",         href: "/po",        icon: FileCheck,       permission: "view_po" },
+  { label: "PO",           href: "/po",           icon: FileCheck,  permission: "view_po" },
+  { label: "Quotations",   href: "/quotations",   icon: ScrollText, permission: "view_quotations" },
 ];
 
 export default function Sidebar() {

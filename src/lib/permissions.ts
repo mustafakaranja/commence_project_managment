@@ -15,6 +15,7 @@ export type Permission =
   | "view_invoices"
   | "view_members"
   | "view_po"
+  | "view_quotations"
   | "view_expenses"
   | "add_member"
   | "edit_member"
@@ -30,7 +31,13 @@ export type Permission =
   | "delete_invoice"
   | "add_expense"
   | "edit_expense"
-  | "delete_expense";
+  | "delete_expense"
+  | "add_po"
+  | "edit_po"
+  | "delete_po"
+  | "add_quotation"
+  | "edit_quotation"
+  | "delete_quotation";
 
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   admin: [
@@ -56,6 +63,9 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "add_expense",
     "edit_expense",
     "delete_expense",
+    "add_po",
+    "edit_po",
+    "delete_po",
   ],
   director: [
     "view_dashboard",
@@ -68,6 +78,13 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "add_expense",
     "edit_expense",
     "delete_expense",
+    "add_po",
+    "edit_po",
+    "delete_po",
+    "view_quotations",
+    "add_quotation",
+    "edit_quotation",
+    "delete_quotation",
   ],
   account_manager: [
     "view_projects",
@@ -83,6 +100,8 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "edit_client",
     "add_invoice",
     "edit_invoice",
+    "add_po",
+    "edit_po",
   ],
   manager: [
     "view_projects",
@@ -120,18 +139,22 @@ const EXPENSE_PERMISSIONS: Permission[] = [
   "delete_expense",
 ];
 
+const QUOTATION_PERMISSIONS: Permission[] = [
+  "view_quotations",
+  "add_quotation",
+  "edit_quotation",
+  "delete_quotation",
+];
+
 export function hasPermission(
   role: Role,
   permission: Permission,
   designation?: string
 ): boolean {
   if (ROLE_PERMISSIONS[role]?.includes(permission)) return true;
-  if (
-    EXPENSE_PERMISSIONS.includes(permission) &&
-    designation?.trim().toLowerCase() === "director"
-  ) {
-    return true;
-  }
+  const isDirector = designation?.trim().toLowerCase() === "director";
+  if (isDirector && EXPENSE_PERMISSIONS.includes(permission)) return true;
+  if (isDirector && QUOTATION_PERMISSIONS.includes(permission)) return true;
   return false;
 }
 
