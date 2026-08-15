@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongoose";
 import Project from "@/models/Project";
+import { toProjectUpdate, validateProjectBody } from "@/lib/project-payload";
 
 export async function PUT(
   request: Request,
@@ -9,16 +10,15 @@ export async function PUT(
   await connectDB();
   const { id } = await params;
   const body = await request.json();
+
+  const invalid = validateProjectBody(body);
+  if (invalid) {
+    return NextResponse.json({ error: invalid }, { status: 400 });
+  }
+
   const project = await Project.findByIdAndUpdate(
     id,
-    {
-      title: body.title,
-      type: body.type,
-      clientId: body.clientId,
-      members: body.members ?? [],
-      estimationDeadline: new Date(body.estimationDeadline),
-      tasks: body.tasks ?? [],
-    },
+    toProjectUpdate(body),
     { new: true }
   ).populate("clientId", "name");
   if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });

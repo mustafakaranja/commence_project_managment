@@ -1,5 +1,6 @@
 export type Role =
   | "admin"
+  | "director"
   | "account_manager"
   | "manager"
   | "developer"
@@ -14,6 +15,7 @@ export type Permission =
   | "view_invoices"
   | "view_members"
   | "view_po"
+  | "view_expenses"
   | "add_member"
   | "edit_member"
   | "delete_member"
@@ -25,7 +27,10 @@ export type Permission =
   | "delete_client"
   | "add_invoice"
   | "edit_invoice"
-  | "delete_invoice";
+  | "delete_invoice"
+  | "add_expense"
+  | "edit_expense"
+  | "delete_expense";
 
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   admin: [
@@ -47,6 +52,22 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "add_invoice",
     "edit_invoice",
     "delete_invoice",
+    "view_expenses",
+    "add_expense",
+    "edit_expense",
+    "delete_expense",
+  ],
+  director: [
+    "view_dashboard",
+    "view_projects",
+    "view_clients",
+    "view_invoices",
+    "view_members",
+    "view_po",
+    "view_expenses",
+    "add_expense",
+    "edit_expense",
+    "delete_expense",
   ],
   account_manager: [
     "view_projects",
@@ -92,12 +113,31 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   ],
 };
 
-export function hasPermission(role: Role, permission: Permission): boolean {
-  return ROLE_PERMISSIONS[role]?.includes(permission) ?? false;
+const EXPENSE_PERMISSIONS: Permission[] = [
+  "view_expenses",
+  "add_expense",
+  "edit_expense",
+  "delete_expense",
+];
+
+export function hasPermission(
+  role: Role,
+  permission: Permission,
+  designation?: string
+): boolean {
+  if (ROLE_PERMISSIONS[role]?.includes(permission)) return true;
+  if (
+    EXPENSE_PERMISSIONS.includes(permission) &&
+    designation?.trim().toLowerCase() === "director"
+  ) {
+    return true;
+  }
+  return false;
 }
 
 export const ROLE_LABELS: Record<Role, string> = {
   admin: "Admin",
+  director: "Director",
   account_manager: "Account Manager",
   manager: "Manager",
   developer: "Developer",
@@ -108,6 +148,7 @@ export const ROLE_LABELS: Record<Role, string> = {
 
 export const ALL_ROLES: Role[] = [
   "admin",
+  "director",
   "account_manager",
   "manager",
   "developer",

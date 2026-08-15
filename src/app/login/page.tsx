@@ -41,7 +41,8 @@ export default function LoginPage() {
     if (res.ok) {
       const data = await res.json();
       const role = data.user?.role;
-      const home = ROLE_HOME.find((r) => hasPermission(role, r.permission))?.path ?? "/projects";
+      const designation = data.user?.designation;
+      const home = ROLE_HOME.find((r) => hasPermission(role, r.permission, designation))?.path ?? "/projects";
       router.push(home);
       router.refresh();
     } else {

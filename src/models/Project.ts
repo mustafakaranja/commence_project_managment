@@ -9,6 +9,8 @@ export interface ITask {
   assignedTo?: string;
 }
 
+export type RecurringBy = "Monthly" | "Yearly";
+
 export interface IProject extends Document {
   title: string;
   type: string;
@@ -16,6 +18,9 @@ export interface IProject extends Document {
   members: string[];
   estimationDeadline: Date;
   tasks: ITask[];
+  recurringBy?: RecurringBy | null;
+  recurringDuration?: number | null;
+  renewalDate?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -39,6 +44,9 @@ const ProjectSchema = new Schema<IProject>(
     members: [{ type: String }],
     estimationDeadline: { type: Date, required: true },
     tasks: [TaskSchema],
+    recurringBy: { type: String, enum: ["Monthly", "Yearly"] },
+    recurringDuration: { type: Number, min: 1 },
+    renewalDate: { type: Date },
   },
   { timestamps: true }
 );

@@ -49,7 +49,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const can = (permission: Permission) => {
     if (!user) return false;
-    return hasPermission(user.role, permission);
+    return hasPermission(user.role, permission, user.designation);
   };
 
   return (

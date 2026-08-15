@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,12 +18,13 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Plus, Pencil, Trash2, FolderKanban, X } from "lucide-react";
+import { Plus, Pencil, Trash2, FolderKanban, X, AlertTriangle } from "lucide-react";
 import { format } from "date-fns";
+import { daysUntil, isRenewalDue } from "@/lib/renewal";
 
 interface Task { title: string; description: string; status: "Todo" | "In Progress" | "Done"; assignedTo: string; }
 interface IClient { _id: string; name: string; }
-interface IMember { _id: string; name: string; role?: string; }
+interface IMember { _id: string; fullName?: string; name?: string; role?: string; }
 interface Project {
   _id: string;
   title: string;
@@ -31,7 +33,12 @@ interface Project {
   members: string[];
   estimationDeadline: string;
   tasks: Task[];
+  recurringBy?: "Monthly" | "Yearly" | null;
+  recurringDuration?: number | null;
+  renewalDate?: string | null;
 }
+
+type RecurringBy = "" | "Monthly" | "Yearly";
 
 const emptyForm = {
   title: "",
@@ -40,11 +47,26 @@ const emptyForm = {
   members: [] as string[],
   estimationDeadline: "",
   tasks: [] as Task[],
+  recurringBy: "" as RecurringBy,
+  recurringDuration: "",
+  renewalDate: "",
 };
+
+function memberName(m: IMember) {
+  return m.fullName || m.name || "";
+}
 
 function completionPct(tasks: Task[]) {
   if (!tasks.length) return 0;
   return Math.round((tasks.filter((t) => t.status === "Done").length / tasks.length) * 100);
+}
+
+function invoiceHref(p: Project) {
+  const params = new URLSearchParams({
+    clientId: p.clientId?._id ?? "",
+    invoiceFor: `Renewal — ${p.title}`,
+  });
+  return `/invoices/new?${params.toString()}`;
 }
 
 export default function ProjectsPage() {
@@ -76,6 +98,10 @@ export default function ProjectsPage() {
     setProjects(p);
   };
 
+  const dueProjects = projects.filter(
+    (p) => p.type === "Recurring" && isRenewalDue(p.renewalDate)
+  );
+
   const openAdd = () => {
     setEditTarget(null);
     setForm(emptyForm);
@@ -92,9 +118,26 @@ export default function ProjectsPage() {
       members: p.members,
       estimationDeadline: p.estimationDeadline.split("T")[0],
       tasks: p.tasks.map((t) => ({ ...t, description: (t as Task).description ?? "" })),
+      recurringBy: p.recurringBy ?? "",
+      recurringDuration: p.recurringDuration != null ? String(p.recurringDuration) : "",
+      renewalDate: p.renewalDate ? p.renewalDate.split("T")[0] : "",
     });
     setError("");
     setOpen(true);
+  };
+
+  const setType = (type: string) => {
+    if (type === "Recurring") {
+      setForm((f) => ({ ...f, type }));
+      return;
+    }
+    setForm((f) => ({
+      ...f,
+      type,
+      recurringBy: "",
+      recurringDuration: "",
+      renewalDate: "",
+    }));
   };
 
   const toggleMember = (name: string) => {
@@ -128,13 +171,31 @@ export default function ProjectsPage() {
       setError("Title, client, and deadline are required.");
       return;
     }
+    if (form.type === "Recurring") {
+      if (!form.recurringBy) {
+        setError("Select Monthly or Yearly.");
+        return;
+      }
+      if (!form.recurringDuration || Number(form.recurringDuration) < 1) {
+        setError(form.recurringBy === "Monthly" ? "Enter how many months." : "Enter how many years.");
+        return;
+      }
+      if (!form.renewalDate) {
+        setError("Renewal date is required for recurring projects.");
+        return;
+      }
+    }
     setSaving(true);
+    const payload = {
+      ...form,
+      recurringDuration: form.recurringDuration ? Number(form.recurringDuration) : undefined,
+    };
     const url = editTarget ? `/api/projects/${editTarget._id}` : "/api/projects";
     const method = editTarget ? "PUT" : "POST";
     const res = await fetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
+      body: JSON.stringify(payload),
     });
     setSaving(false);
     if (res.ok) {
@@ -153,8 +214,48 @@ export default function ProjectsPage() {
     refresh();
   };
 
+  const showDuration = form.type === "Recurring" && !!form.recurringBy;
+  const showRenewalDate = showDuration && Number(form.recurringDuration) >= 1;
+
   return (
     <div className="p-8">
+      {dueProjects.length > 0 && (
+        <div className="mb-6 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-amber-900">
+                {dueProjects.length} project{dueProjects.length > 1 ? "s" : ""} need renewal — please create the invoice
+              </p>
+              <ul className="mt-2 space-y-1.5">
+                {dueProjects.map((p) => {
+                  const days = p.renewalDate ? daysUntil(p.renewalDate) : 0;
+                  const when =
+                    days < 0
+                      ? `overdue by ${Math.abs(days)} day${Math.abs(days) === 1 ? "" : "s"}`
+                      : days === 0
+                      ? "due today"
+                      : `due in ${days} day${days === 1 ? "" : "s"}`;
+                  return (
+                    <li key={p._id} className="flex items-center justify-between gap-3 text-sm text-amber-900">
+                      <span className="truncate">
+                        <span className="font-medium">{p.title}</span>
+                        <span className="text-amber-700"> · {p.clientId?.name ?? "—"} · {when}</span>
+                      </span>
+                      <Link href={invoiceHref(p)}>
+                        <Button size="sm" className="h-7 bg-[#0F6E56] hover:bg-[#0d5e49] text-xs shrink-0">
+                          Create invoice
+                        </Button>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Projects</h1>
@@ -173,6 +274,7 @@ export default function ProjectsPage() {
               <TableHead>Client</TableHead>
               <TableHead>Type</TableHead>
               <TableHead>Deadline</TableHead>
+              <TableHead>Renewal</TableHead>
               <TableHead>Members</TableHead>
               <TableHead>Completion</TableHead>
               <TableHead className="w-24 text-right">Actions</TableHead>
@@ -182,7 +284,7 @@ export default function ProjectsPage() {
             {loading
               ? Array.from({ length: 3 }).map((_, i) => (
                   <TableRow key={i}>
-                    {Array.from({ length: 7 }).map((_, j) => (
+                    {Array.from({ length: 8 }).map((_, j) => (
                       <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
                     ))}
                   </TableRow>
@@ -190,7 +292,7 @@ export default function ProjectsPage() {
               : projects.length === 0
               ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-16 text-gray-400">
+                  <TableCell colSpan={8} className="text-center py-16 text-gray-400">
                     <FolderKanban className="w-10 h-10 mx-auto mb-3 opacity-30" />
                     <p className="font-medium">No projects yet</p>
                     <p className="text-sm mt-1">Click &quot;Add Project&quot; to get started.</p>
@@ -199,12 +301,39 @@ export default function ProjectsPage() {
               )
               : projects.map((p) => {
                   const pct = completionPct(p.tasks);
+                  const due = p.type === "Recurring" && isRenewalDue(p.renewalDate);
+                  const overdue = due && p.renewalDate ? daysUntil(p.renewalDate) < 0 : false;
                   return (
-                    <TableRow key={p._id}>
+                    <TableRow
+                      key={p._id}
+                      className={
+                        overdue
+                          ? "bg-red-50 hover:bg-red-100"
+                          : due
+                          ? "bg-amber-50 hover:bg-amber-100"
+                          : undefined
+                      }
+                    >
                       <TableCell className="font-medium">{p.title}</TableCell>
                       <TableCell>{p.clientId?.name ?? "—"}</TableCell>
-                      <TableCell><Badge variant="outline">{p.type}</Badge></TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{p.type}</Badge>
+                        {p.type === "Recurring" && p.recurringBy && (
+                          <span className="ml-1.5 text-xs text-gray-500">
+                            {p.recurringDuration} {p.recurringBy === "Monthly" ? "mo" : "yr"}
+                          </span>
+                        )}
+                      </TableCell>
                       <TableCell>{format(new Date(p.estimationDeadline), "dd MMM yyyy")}</TableCell>
+                      <TableCell>
+                        {p.renewalDate ? (
+                          <span className={due ? (overdue ? "text-red-700 font-medium" : "text-amber-800 font-medium") : ""}>
+                            {format(new Date(p.renewalDate), "dd MMM yyyy")}
+                          </span>
+                        ) : (
+                          "—"
+                        )}
+                      </TableCell>
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
                           {p.members.slice(0, 3).map((m) => (
@@ -245,11 +374,9 @@ export default function ProjectsPage() {
         </Table>
       </div>
 
-      {/* Right-side Sheet */}
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent side="right" className="w-[520px] sm:w-[580px] overflow-y-auto p-0">
           <form onSubmit={handleSubmit} className="flex flex-col h-full">
-            {/* Header */}
             <SheetHeader className="px-6 py-5 border-b bg-white sticky top-0 z-10">
               <SheetTitle className="text-lg">
                 {editTarget ? `Edit: ${editTarget.title}` : "Add New Project"}
@@ -259,10 +386,7 @@ export default function ProjectsPage() {
               </p>
             </SheetHeader>
 
-            {/* Scrollable body */}
             <div className="flex-1 px-6 py-6 space-y-6 overflow-y-auto">
-
-              {/* Basic Info */}
               <div className="space-y-4">
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Basic Info</p>
                 <div className="space-y-1.5">
@@ -276,12 +400,13 @@ export default function ProjectsPage() {
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <Label>Project Type</Label>
-                    <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v ?? "Fixed" })}>
+                    <Select value={form.type} onValueChange={(v) => setType(v ?? "Fixed")}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="Fixed">Fixed</SelectItem>
                         <SelectItem value="Hourly">Hourly</SelectItem>
                         <SelectItem value="Retainer">Retainer</SelectItem>
+                        <SelectItem value="Recurring">Recurring</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -294,6 +419,58 @@ export default function ProjectsPage() {
                     />
                   </div>
                 </div>
+
+                {form.type === "Recurring" && (
+                  <div className="rounded-lg border border-[#0F6E56]/20 bg-[#E1F5EE]/40 p-4 space-y-3">
+                    <p className="text-xs font-semibold text-[#0F6E56] uppercase tracking-wider">Recurring</p>
+                    <div className="space-y-1.5">
+                      <Label>Recurring by *</Label>
+                      <Select
+                        value={form.recurringBy}
+                        onValueChange={(v) =>
+                          setForm({ ...form, recurringBy: (v as RecurringBy) ?? "", recurringDuration: "", renewalDate: "" })
+                        }
+                      >
+                        <SelectTrigger className="bg-white"><SelectValue placeholder="Select period" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Monthly">Monthly</SelectItem>
+                          <SelectItem value="Yearly">Yearly</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {showDuration && (
+                      <div className="space-y-1.5">
+                        <Label>
+                          {form.recurringBy === "Monthly" ? "How many months? *" : "How many years? *"}
+                        </Label>
+                        <Input
+                          type="number"
+                          min={1}
+                          step={1}
+                          className="bg-white"
+                          placeholder={form.recurringBy === "Monthly" ? "e.g. 6" : "e.g. 1"}
+                          value={form.recurringDuration}
+                          onChange={(e) => setForm({ ...form, recurringDuration: e.target.value, renewalDate: "" })}
+                        />
+                      </div>
+                    )}
+                    {showRenewalDate && (
+                      <div className="space-y-1.5">
+                        <Label>Renewal date *</Label>
+                        <Input
+                          type="date"
+                          className="bg-white"
+                          value={form.renewalDate}
+                          onChange={(e) => setForm({ ...form, renewalDate: e.target.value })}
+                        />
+                        <p className="text-xs text-gray-500">
+                          Date this {form.recurringBy === "Monthly" ? "period" : "year"} needs to be renewed.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="space-y-1.5">
                   <Label>Client *</Label>
                   <Select value={form.clientId} onValueChange={(v) => setForm({ ...form, clientId: v ?? "" })}>
@@ -309,7 +486,6 @@ export default function ProjectsPage() {
 
               <Separator />
 
-              {/* Team Members */}
               <div className="space-y-3">
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Team Members</p>
                 {members.length === 0 ? (
@@ -319,12 +495,13 @@ export default function ProjectsPage() {
                 ) : (
                   <div className="flex flex-wrap gap-2">
                     {members.map((m) => {
-                      const selected = form.members.includes(m.name);
+                      const name = memberName(m);
+                      const selected = form.members.includes(name);
                       return (
                         <button
                           key={m._id}
                           type="button"
-                          onClick={() => toggleMember(m.name)}
+                          onClick={() => toggleMember(name)}
                           className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border transition-all ${
                             selected
                               ? "bg-[#0F6E56] text-white border-[#0F6E56] shadow-sm"
@@ -332,7 +509,7 @@ export default function ProjectsPage() {
                           }`}
                         >
                           {selected && <X className="w-3 h-3" />}
-                          {m.name}
+                          {name}
                           {m.role && <span className="opacity-60"> · {m.role}</span>}
                         </button>
                       );
@@ -348,7 +525,6 @@ export default function ProjectsPage() {
 
               <Separator />
 
-              {/* Tasks */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Tasks</p>
@@ -365,7 +541,6 @@ export default function ProjectsPage() {
 
                 {form.tasks.map((task, i) => (
                   <div key={i} className="border rounded-xl p-4 space-y-3 bg-gray-50 relative">
-                    {/* Remove task */}
                     <button
                       type="button"
                       onClick={() => removeTask(i)}
@@ -403,9 +578,9 @@ export default function ProjectsPage() {
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="Todo">📋 Todo</SelectItem>
-                            <SelectItem value="In Progress">⚡ In Progress</SelectItem>
-                            <SelectItem value="Done">✅ Done</SelectItem>
+                            <SelectItem value="Todo">Todo</SelectItem>
+                            <SelectItem value="In Progress">In Progress</SelectItem>
+                            <SelectItem value="Done">Done</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -424,7 +599,6 @@ export default function ProjectsPage() {
               </div>
             </div>
 
-            {/* Sticky footer */}
             <SheetFooter className="px-6 py-4 border-t bg-white sticky bottom-0 z-10">
               {error && (
                 <p className="text-sm text-red-500 bg-red-50 border border-red-200 rounded px-3 py-2 w-full mb-2">

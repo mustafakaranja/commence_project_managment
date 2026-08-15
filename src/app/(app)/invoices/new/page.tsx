@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useReactToPrint } from "react-to-print";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,8 +25,9 @@ interface SavedInvoice {
   invoiceFor: string;
 }
 
-export default function NewInvoicePage() {
+function NewInvoiceForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [clients, setClients] = useState<Client[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -35,12 +36,12 @@ export default function NewInvoicePage() {
   const printRef = useRef<HTMLDivElement>(null);
 
   const [form, setForm] = useState({
-    clientId: "",
+    clientId: searchParams.get("clientId") ?? "",
     invoiceDate: new Date().toISOString().split("T")[0],
     address: "",
     amount: "",
     taxAmount: "",
-    invoiceFor: "",
+    invoiceFor: searchParams.get("invoiceFor") ?? "",
   });
 
   useEffect(() => {
@@ -269,5 +270,13 @@ export default function NewInvoicePage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function NewInvoicePage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-sm text-gray-500">Loading invoice form…</div>}>
+      <NewInvoiceForm />
+    </Suspense>
   );
 }

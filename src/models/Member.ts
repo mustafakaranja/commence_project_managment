@@ -1,6 +1,6 @@
 import mongoose, { Schema, Document, Model } from "mongoose";
 
-export type MemberRole = "admin" | "account_manager" | "manager" | "developer" | "HR" | "LT" | "user";
+export type MemberRole = "admin" | "director" | "account_manager" | "manager" | "developer" | "HR" | "LT" | "user";
 
 export interface IMember extends Document {
   fullName: string;
@@ -23,7 +23,7 @@ const MemberSchema = new Schema<IMember>(
     passwordHash: { type: String, required: true },
     role: {
       type: String,
-      enum: ["admin", "account_manager", "manager", "developer", "HR", "LT", "user"],
+      enum: ["admin", "director", "account_manager", "manager", "developer", "HR", "LT", "user"],
       default: "user",
     },
     portalAccess: { type: Boolean, default: true },
