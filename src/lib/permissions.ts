@@ -87,6 +87,8 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "add_quotation",
     "edit_quotation",
     "delete_quotation",
+    "add_project",
+    "edit_project",
   ],
   account_manager: [
     "view_projects",

@@ -6,6 +6,11 @@ export interface IQuotationService {
   amount: number;
 }
 
+export interface ISpecGroup {
+  title: string;
+  items: string[];
+}
+
 export interface IQuotation extends Document {
   quoteNumber: string;
   name: string;
@@ -26,6 +31,14 @@ export interface IQuotation extends Document {
   notes?: string;
   commitment?: string;
   status: string;
+  packageName?: string;
+  serviceType?: string;
+  specGroups: ISpecGroup[];
+  unitPrice?: number;
+  durationMonths?: number;
+  subscriptionYears?: number;
+  renewalPrice?: number;
+  financeNote?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -35,6 +48,14 @@ const QuotationServiceSchema = new Schema<IQuotationService>(
     title: { type: String, required: true, trim: true },
     description: { type: String, default: "", trim: true },
     amount: { type: Number, required: true, default: 0 },
+  },
+  { _id: false }
+);
+
+const SpecGroupSchema = new Schema<ISpecGroup>(
+  {
+    title: { type: String, required: true, trim: true },
+    items: [{ type: String, trim: true }],
   },
   { _id: false }
 );
@@ -59,6 +80,14 @@ const QuotationSchema = new Schema<IQuotation>(
     validUntil: { type: Date, required: true },
     notes: { type: String, default: "" },
     commitment: { type: String, default: "" },
+    packageName: { type: String, default: "", trim: true },
+    serviceType: { type: String, default: "", trim: true },
+    specGroups: { type: [SpecGroupSchema], default: [] },
+    unitPrice: { type: Number, default: 0 },
+    durationMonths: { type: Number, default: 0 },
+    subscriptionYears: { type: Number, default: 1, min: 1, max: 4 },
+    renewalPrice: { type: Number, default: 0 },
+    financeNote: { type: String, default: "" },
     status: {
       type: String,
       enum: ["Draft", "Open", "Pending", "Approved", "Close"],

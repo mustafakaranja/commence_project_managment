@@ -25,21 +25,27 @@ export async function PUT(
   const denied = await requireQuotationAccess();
   if (denied) return denied;
 
-  await connectDB();
-  const { id } = await params;
-  const body = await request.json();
-  const invalid = validateQuotationBody(body);
-  if (invalid) {
-    return NextResponse.json({ error: invalid }, { status: 400 });
-  }
+  try {
+    await connectDB();
+    const { id } = await params;
+    const body = await request.json();
+    const invalid = validateQuotationBody(body);
+    if (invalid) {
+      return NextResponse.json({ error: invalid }, { status: 400 });
+    }
 
-  const quote = await Quotation.findByIdAndUpdate(
-    id,
-    { $set: toQuotationFields(body) },
-    { new: true }
-  );
-  if (!quote) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json(quote);
+    const quote = await Quotation.findByIdAndUpdate(
+      id,
+      { $set: toQuotationFields(body) },
+      { returnDocument: "after" }
+    );
+    if (!quote) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return NextResponse.json(quote.toObject());
+  } catch (err) {
+    console.error("[quotations PUT]", err);
+    const message = err instanceof Error ? err.message : "Failed to save quotation.";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }
 
 export async function DELETE(

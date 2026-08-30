@@ -10,6 +10,8 @@ type ProjectBody = {
   recurringBy?: string;
   recurringDuration?: number | string;
   renewalDate?: string;
+  quoteId?: string | null;
+  quoteNumber?: string;
 };
 
 export function validateProjectBody(body: ProjectBody): string | null {
@@ -42,11 +44,15 @@ export function toProjectFields(body: ProjectBody) {
     clientId: body.clientId,
     members: body.members ?? [],
     estimationDeadline: new Date(String(body.estimationDeadline)),
-    tasks: body.tasks ?? [],
+    tasks: (body.tasks ?? []).filter((t) => String(t.title ?? "").trim()),
   };
-  if (!isRecurring) return base;
+  const withQuote =
+    body.quoteId !== undefined || body.quoteNumber !== undefined
+      ? { ...base, quoteId: body.quoteId || null, quoteNumber: body.quoteNumber ?? "" }
+      : base;
+  if (!isRecurring) return withQuote;
   return {
-    ...base,
+    ...withQuote,
     recurringBy: body.recurringBy as RecurringBy,
     recurringDuration: Number(body.recurringDuration),
     renewalDate: new Date(String(body.renewalDate)),

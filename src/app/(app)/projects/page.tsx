@@ -36,6 +36,8 @@ interface Project {
   recurringBy?: "Monthly" | "Yearly" | null;
   recurringDuration?: number | null;
   renewalDate?: string | null;
+  quoteId?: string | null;
+  quoteNumber?: string;
 }
 
 type RecurringBy = "" | "Monthly" | "Yearly";
@@ -314,7 +316,12 @@ export default function ProjectsPage() {
                           : undefined
                       }
                     >
-                      <TableCell className="font-medium">{p.title}</TableCell>
+                      <TableCell className="font-medium">
+                        <p>{p.title}</p>
+                        {p.quoteNumber ? (
+                          <p className="text-xs text-gray-400 font-normal">{p.quoteNumber}</p>
+                        ) : null}
+                      </TableCell>
                       <TableCell>{p.clientId?.name ?? "—"}</TableCell>
                       <TableCell>
                         <Badge variant="outline">{p.type}</Badge>

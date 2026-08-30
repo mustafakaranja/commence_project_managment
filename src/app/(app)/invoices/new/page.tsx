@@ -12,7 +12,8 @@ import {
 import { Separator } from "@/components/ui/separator";
 import InvoicePreview from "@/components/InvoicePreview";
 import InvoiceLineItems, { emptyInvoiceItem, type InvoiceItemRow } from "@/components/InvoiceLineItems";
-import { quotationTotals } from "@/lib/quotation-payload";
+import { quoteFinancials } from "@/lib/quotation-payload";
+import { isSubscriptionQuote } from "@/lib/quotation-catalog";
 import { invoiceSubtotal, INVOICE_STATUSES } from "@/lib/invoice-payload";
 import { ArrowLeft, Save, Download, CheckCircle2, ListPlus } from "lucide-react";
 import Link from "next/link";
@@ -78,16 +79,21 @@ function NewInvoiceForm() {
         (c) => c.name.trim().toLowerCase() === String(quote.clientName ?? "").trim().toLowerCase()
       );
       const services = Array.isArray(quote.services) ? quote.services : [];
-      const items: InvoiceItemRow[] = services
-        .filter((s: { title?: string }) => String(s.title ?? "").trim())
-        .map((s: { title?: string; description?: string; amount?: number }) => ({
-          description: [s.title, s.description].filter(Boolean).join("\n"),
-          amount: String(s.amount ?? 0),
-        }));
-      const money = quotationTotals(
-        services.map((s: { amount?: number }) => ({ amount: Number(s.amount) || 0 })),
-        Number(quote.gstPercent) || 0
-      );
+      const money = quoteFinancials(quote);
+      const items: InvoiceItemRow[] = isSubscriptionQuote(quote.type)
+        ? [{
+            description: [
+              quote.packageName || quote.name || "Subscription package",
+              `${Number(quote.durationMonths) || 12} Months @ ₹${Number(quote.unitPrice) || 0}/month`,
+            ].join("\n"),
+            amount: String(money.subtotal),
+          }]
+        : services
+            .filter((s: { title?: string }) => String(s.title ?? "").trim())
+            .map((s: { title?: string; description?: string; amount?: number }) => ({
+              description: [s.title, s.description].filter(Boolean).join("\n"),
+              amount: String(s.amount ?? 0),
+            }));
       setQuoteHint(quote.clientName ? `Quotation client: ${quote.clientName}` : "");
       setForm((prev) => ({
         ...prev,

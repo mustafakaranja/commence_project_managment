@@ -16,12 +16,22 @@ import { Separator } from "@/components/ui/separator";
 import FeatureMultiSelect from "@/components/FeatureMultiSelect";
 import QuotationPreview, { type QuotationPreviewData } from "@/components/QuotationPreview";
 import {
-  QUOTE_TYPES, QUOTE_STATUSES, TECH_OPTIONS, TIMELINE_UNITS, featuresForType,
+  QUOTE_TYPES,
+  QUOTE_STATUSES,
+  TECH_OPTIONS,
+  TIMELINE_UNITS,
+  SUBSCRIPTION_YEARS,
+  DEFAULT_PACKAGE_NAME,
+  defaultFilledSpecGroups,
+  featuresForType,
+  isSubscriptionQuote,
+  specOptionsFor,
 } from "@/lib/quotation-catalog";
-import { quotationTotals } from "@/lib/quotation-payload";
-import { ArrowLeft, Download, FileText, Plus, Save, Trash2 } from "lucide-react";
+import { quoteFinancials } from "@/lib/quotation-payload";
+import { ArrowLeft, Download, FileText, FolderKanban, Plus, Save, Trash2 } from "lucide-react";
 
 type ServiceRow = { title: string; description: string; amount: string };
+type SpecGroupRow = { title: string; items: string[] };
 
 type FormState = {
   name: string;
@@ -43,6 +53,14 @@ type FormState = {
   notes: string;
   commitment: string;
   status: string;
+  packageName: string;
+  serviceType: string;
+  specGroups: SpecGroupRow[];
+  unitPrice: string;
+  durationMonths: string;
+  subscriptionYears: string;
+  renewalPrice: string;
+  financeNote: string;
 };
 
 const today = () => new Date().toISOString().split("T")[0];
@@ -72,6 +90,14 @@ export function emptyQuotationForm(): FormState {
     commitment:
       "We are committed to a clean rollout: agreed scope, timely delivery, and support through go-live.",
     status: "Draft",
+    packageName: "",
+    serviceType: "Annual Subscription",
+    specGroups: [],
+    unitPrice: "",
+    durationMonths: "12",
+    subscriptionYears: "1",
+    renewalPrice: "",
+    financeNote: "",
   };
 }
 
@@ -94,8 +120,17 @@ export function quotationToForm(quote: {
   notes?: string;
   commitment?: string;
   status?: string;
+  packageName?: string;
+  serviceType?: string;
+  specGroups?: SpecGroupRow[];
+  unitPrice?: number;
+  durationMonths?: number;
+  subscriptionYears?: number;
+  renewalPrice?: number;
+  financeNote?: string;
 }): FormState {
   const known = (QUOTE_TYPES as readonly string[]).includes(quote.type ?? "");
+  const subscription = isSubscriptionQuote(quote.type);
   return {
     name: quote.name ?? "",
     type: known ? String(quote.type) : "Custom",
@@ -120,6 +155,14 @@ export function quotationToForm(quote: {
     notes: quote.notes ?? "",
     commitment: quote.commitment ?? "",
     status: quote.status ?? "Draft",
+    packageName: quote.packageName ?? (subscription ? quote.name ?? "" : ""),
+    serviceType: quote.serviceType || "Annual Subscription",
+    specGroups: quote.specGroups?.length ? quote.specGroups : (subscription ? defaultFilledSpecGroups() : []),
+    unitPrice: quote.unitPrice != null && quote.unitPrice !== 0 ? String(quote.unitPrice) : "",
+    durationMonths: String(quote.durationMonths || (Number(quote.subscriptionYears) || 1) * 12),
+    subscriptionYears: String(quote.subscriptionYears || 1),
+    renewalPrice: quote.renewalPrice != null && quote.renewalPrice !== 0 ? String(quote.renewalPrice) : "",
+    financeNote: quote.financeNote ?? "",
   };
 }
 
@@ -151,12 +194,20 @@ function toPreview(form: FormState, quoteNumber: string): QuotationPreviewData {
     validUntil: form.validUntil,
     notes: form.notes,
     commitment: form.commitment,
+    packageName: form.packageName,
+    serviceType: form.serviceType,
+    specGroups: form.specGroups,
+    unitPrice: Number(form.unitPrice) || 0,
+    durationMonths: Number(form.durationMonths) || 0,
+    subscriptionYears: Number(form.subscriptionYears) || 1,
+    renewalPrice: Number(form.renewalPrice) || 0,
+    financeNote: form.financeNote,
   };
 }
 
 function payloadFromForm(form: FormState) {
   return {
-    name: form.name,
+    name: form.name.trim() || form.packageName,
     type: resolvedType(form),
     clientName: form.clientName,
     clientAttention: form.clientAttention,
@@ -178,6 +229,14 @@ function payloadFromForm(form: FormState) {
     notes: form.notes,
     commitment: form.commitment,
     status: form.status,
+    packageName: form.packageName,
+    serviceType: form.serviceType,
+    specGroups: form.specGroups,
+    unitPrice: Number(form.unitPrice) || 0,
+    durationMonths: Number(form.durationMonths) || 0,
+    subscriptionYears: Number(form.subscriptionYears) || 1,
+    renewalPrice: Number(form.renewalPrice) || 0,
+    financeNote: form.financeNote,
   };
 }
 
@@ -199,15 +258,44 @@ export default function QuotationEditor({
   const [savedNumber, setSavedNumber] = useState<string | null>(initialNumber ?? null);
   const [savedId, setSavedId] = useState<string | null>(quoteId ?? null);
   const [form, setForm] = useState<FormState>(initial ?? emptyQuotationForm());
+  const [creatingProject, setCreatingProject] = useState(false);
 
   const quoteNumber = savedNumber ?? "QT-DRAFT";
   const typeLabel = resolvedType(form);
-  const money = quotationTotals(
-    form.services.map((row) => ({ amount: Number(row.amount) || 0 })),
-    Number(form.gstPercent) || 0
-  );
+  const isSub = isSubscriptionQuote(typeLabel || form.type);
+  const money = quoteFinancials({
+    type: typeLabel || form.type,
+    services: form.services.map((row) => ({ amount: Number(row.amount) || 0 })),
+    gstPercent: Number(form.gstPercent) || 0,
+    unitPrice: Number(form.unitPrice) || 0,
+    durationMonths: Number(form.durationMonths) || 0,
+  });
   const previewData = useMemo(() => toPreview(form, quoteNumber), [form, quoteNumber]);
   const featureOptions = featuresForType(typeLabel || form.type);
+
+  const applyType = (next: string) => {
+    if (next === "Subscription Base") {
+      const years = form.subscriptionYears || "1";
+      const months = String(Number(years) * 12);
+      setForm({
+        ...form,
+        type: next,
+        packageName: form.packageName || DEFAULT_PACKAGE_NAME,
+        name: form.name || form.packageName || DEFAULT_PACKAGE_NAME,
+        serviceType: form.serviceType || "Annual Subscription",
+        specGroups: form.specGroups.length ? form.specGroups : defaultFilledSpecGroups(),
+        subscriptionYears: years,
+        durationMonths: form.durationMonths || months,
+        timelineValue: form.durationMonths || months,
+        timelineUnit: "Months",
+        estimateLabel: "Annual Subscription",
+        unitPrice: form.unitPrice || "1299",
+        renewalPrice: form.renewalPrice || "1699",
+      });
+      return;
+    }
+    setForm({ ...form, type: next });
+  };
 
   const handlePrint = useReactToPrint({
     contentRef: printRef,
@@ -229,35 +317,76 @@ export default function QuotationEditor({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     setError("");
-    if (!form.name.trim() || !form.clientName.trim()) {
-      setError("Quotation name and client name are required.");
+    if (!form.clientName.trim()) {
+      setError("Client name is required.");
       return;
     }
     if (!resolvedType(form)) {
       setError("Select a type or enter a custom type.");
       return;
     }
-    if (!form.services.some((row) => row.title.trim())) {
-      setError("Add at least one service with a title.");
-      return;
+    if (isSubscriptionQuote(resolvedType(form))) {
+      if (!form.packageName.trim()) {
+        setError("Enter the service package / subscription name.");
+        return;
+      }
+      if (!form.unitPrice.trim() || Number(form.unitPrice) < 0) {
+        setError("Enter a valid unit price.");
+        return;
+      }
+      if (!form.durationMonths.trim() || Number(form.durationMonths) < 1) {
+        setError("Enter a valid duration in months.");
+        return;
+      }
+    } else {
+      if (!form.name.trim()) {
+        setError("Quotation name and client name are required.");
+        return;
+      }
+      if (!form.services.some((row) => row.title.trim())) {
+        setError("Add at least one service with a title.");
+        return;
+      }
     }
     setSaving(true);
-    const url = mode === "edit" && quoteId ? `/api/quotations/${quoteId}` : "/api/quotations";
-    const res = await fetch(url, {
-      method: mode === "edit" ? "PUT" : "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payloadFromForm(form)),
-    });
-    setSaving(false);
-    if (res.ok) {
-      const saved = await res.json();
-      setSavedNumber(saved.quoteNumber);
-      setSavedId(saved._id);
-      if (mode === "edit") router.push("/quotations");
-    } else {
-      const d = await res.json();
-      setError(d.error ?? "Failed to save quotation.");
+    try {
+      const url = mode === "edit" && quoteId ? `/api/quotations/${quoteId}` : "/api/quotations";
+      const res = await fetch(url, {
+        method: mode === "edit" ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payloadFromForm(form)),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(d.error ?? "Failed to save quotation.");
+        return;
+      }
+      router.push("/quotations");
+    } catch {
+      setError("Failed to save quotation. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCreateProject = async () => {
+    if (!savedId) return;
+    setError("");
+    setCreatingProject(true);
+    try {
+      const res = await fetch(`/api/quotations/${savedId}/project`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error ?? "Failed to create project.");
+        return;
+      }
+      router.push("/projects");
+    } catch {
+      setError("Failed to create project. Please try again.");
+    } finally {
+      setCreatingProject(false);
     }
   };
 
@@ -277,20 +406,27 @@ export default function QuotationEditor({
             <p className="text-xs text-gray-400">Live client template on the right</p>
           </div>
         </div>
+        {error && (
+          <p className="mx-6 mt-3 text-sm text-red-500 bg-red-50 border border-red-200 rounded px-3 py-2">
+            {error}
+          </p>
+        )}
 
-        <form onSubmit={handleSubmit} className="flex-1 px-6 py-5 space-y-5">
-          <div className="space-y-1.5">
-            <Label>Quotation name *</Label>
-            <Input
-              placeholder="e.g. Jewellery shop website"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-            />
-          </div>
+        <form onSubmit={handleSubmit} noValidate className="flex-1 px-6 py-5 space-y-5">
+          {!isSub && (
+            <div className="space-y-1.5">
+              <Label>Quotation name *</Label>
+              <Input
+                placeholder="e.g. Jewellery shop website"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+              />
+            </div>
+          )}
 
           <div className="space-y-1.5">
             <Label>Type *</Label>
-            <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v ?? "Web Development" })}>
+            <Select value={form.type} onValueChange={(v) => applyType(v ?? "Web Development")}>
               <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {QUOTE_TYPES.map((t) => (
@@ -309,6 +445,26 @@ export default function QuotationEditor({
                 onChange={(e) => setForm({ ...form, customType: e.target.value })}
               />
             </div>
+          )}
+          {isSub && (
+            <>
+              <div className="space-y-1.5">
+                <Label>Subscription / service package name *</Label>
+                <Input
+                  placeholder={DEFAULT_PACKAGE_NAME}
+                  value={form.packageName}
+                  onChange={(e) => setForm({ ...form, packageName: e.target.value, name: e.target.value })}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Service type</Label>
+                <Input
+                  placeholder="Annual Subscription"
+                  value={form.serviceType}
+                  onChange={(e) => setForm({ ...form, serviceType: e.target.value })}
+                />
+              </div>
+            </>
           )}
 
           <div className="space-y-1.5">
@@ -338,111 +494,256 @@ export default function QuotationEditor({
 
           <Separator />
 
-          <div className="space-y-1.5">
-            <Label>Project overview</Label>
-            <Textarea
-              rows={4}
-              className="resize-none"
-              placeholder="What we will build, for whom, and the outcome."
-              value={form.overview}
-              onChange={(e) => setForm({ ...form, overview: e.target.value })}
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Timeline *</Label>
-              <Input
-                type="number"
-                min={1}
-                value={form.timelineValue}
-                onChange={(e) => setForm({ ...form, timelineValue: e.target.value })}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Unit</Label>
-              <Select value={form.timelineUnit} onValueChange={(v) => setForm({ ...form, timelineUnit: v ?? "Days" })}>
-                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {TIMELINE_UNITS.map((u) => (
-                    <SelectItem key={u} value={u}>{u}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Estimate line</Label>
-            <Input
-              placeholder="One-time cost estimation"
-              value={form.estimateLabel}
-              onChange={(e) => setForm({ ...form, estimateLabel: e.target.value })}
-            />
-          </div>
-
-          <FeatureMultiSelect
-            label="Project tech"
-            hint="Stack used for this rollout. Add a custom item if needed."
-            options={TECH_OPTIONS}
-            selected={form.techStack}
-            onChange={(techStack) => setForm({ ...form, techStack })}
-          />
-
-          <Separator />
-
-          <div className="flex items-center justify-between">
-            <Label>Services & price *</Label>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-7 text-xs"
-              onClick={() => setForm({ ...form, services: [...form.services, emptyService()] })}
-            >
-              <Plus className="w-3 h-3 mr-1" /> Add service
-            </Button>
-          </div>
-          <p className="text-xs text-gray-400 -mt-2">One line per feature in the description. Amount 0 shows as Included.</p>
-          {form.services.map((row, index) => (
-            <div key={index} className="rounded-lg border p-3 space-y-2 bg-gray-50">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-xs font-medium text-gray-500">Service {index + 1}</p>
-                {form.services.length > 1 && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 w-7 p-0 text-red-400 hover:text-red-600"
-                    onClick={() => setForm({ ...form, services: form.services.filter((_, i) => i !== index) })}
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </Button>
-                )}
-              </div>
-              <Input
-                placeholder="e.g. Website frontend & design"
-                value={row.title}
-                onChange={(e) => updateService(index, { title: e.target.value })}
-              />
-              <Textarea
-                rows={3}
-                className="resize-none"
-                placeholder={"Theme purchase\nUp to 30 pages\nSEO + SSL"}
-                value={row.description}
-                onChange={(e) => updateService(index, { description: e.target.value })}
-              />
-              <div className="space-y-1">
-                <Label className="text-xs text-gray-500">Amount (₹)</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  placeholder="0"
-                  value={row.amount}
-                  onChange={(e) => updateService(index, { amount: e.target.value })}
+          {!isSub && (
+            <>
+              <div className="space-y-1.5">
+                <Label>Project overview</Label>
+                <Textarea
+                  rows={4}
+                  className="resize-none"
+                  placeholder="What we will build, for whom, and the outcome."
+                  value={form.overview}
+                  onChange={(e) => setForm({ ...form, overview: e.target.value })}
                 />
               </div>
-            </div>
-          ))}
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Timeline *</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={form.timelineValue}
+                    onChange={(e) => setForm({ ...form, timelineValue: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Unit</Label>
+                  <Select value={form.timelineUnit} onValueChange={(v) => setForm({ ...form, timelineUnit: v ?? "Days" })}>
+                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {TIMELINE_UNITS.map((u) => (
+                        <SelectItem key={u} value={u}>{u}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Estimate line</Label>
+                <Input
+                  placeholder="One-time cost estimation"
+                  value={form.estimateLabel}
+                  onChange={(e) => setForm({ ...form, estimateLabel: e.target.value })}
+                />
+              </div>
+
+              <FeatureMultiSelect
+                label="Project tech"
+                hint="Stack used for this rollout. Add a custom item if needed."
+                options={TECH_OPTIONS}
+                selected={form.techStack}
+                onChange={(techStack) => setForm({ ...form, techStack })}
+              />
+
+              <Separator />
+
+              <div className="flex items-center justify-between">
+                <Label>Services & price *</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => setForm({ ...form, services: [...form.services, emptyService()] })}
+                >
+                  <Plus className="w-3 h-3 mr-1" /> Add service
+                </Button>
+              </div>
+              <p className="text-xs text-gray-400 -mt-2">One line per feature in the description. Amount 0 shows as Included.</p>
+              {form.services.map((row, index) => (
+                <div key={index} className="rounded-lg border p-3 space-y-2 bg-gray-50">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-medium text-gray-500">Service {index + 1}</p>
+                    {form.services.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 p-0 text-red-400 hover:text-red-600"
+                        onClick={() => setForm({ ...form, services: form.services.filter((_, i) => i !== index) })}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                  <Input
+                    placeholder="e.g. Website frontend & design"
+                    value={row.title}
+                    onChange={(e) => updateService(index, { title: e.target.value })}
+                  />
+                  <Textarea
+                    rows={3}
+                    className="resize-none"
+                    placeholder={"Theme purchase\nUp to 30 pages\nSEO + SSL"}
+                    value={row.description}
+                    onChange={(e) => updateService(index, { description: e.target.value })}
+                  />
+                  <div className="space-y-1">
+                    <Label className="text-xs text-gray-500">Amount (₹)</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      placeholder="0"
+                      value={row.amount}
+                      onChange={(e) => updateService(index, { amount: e.target.value })}
+                    />
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+
+          {isSub && (
+            <>
+              <div className="flex items-center justify-between">
+                <Label>Service Package Specifications</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => setForm({
+                    ...form,
+                    specGroups: [...form.specGroups, { title: "New group", items: [] }],
+                  })}
+                >
+                  <Plus className="w-3 h-3 mr-1" /> Add group
+                </Button>
+              </div>
+              <p className="text-xs text-gray-400 -mt-2">
+                Tick the features and services you will provide. Add a custom line inside any group.
+              </p>
+              {form.specGroups.map((group, index) => (
+                <div key={index} className="rounded-lg border p-3 space-y-2 bg-gray-50">
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={group.title}
+                      onChange={(e) => setForm({
+                        ...form,
+                        specGroups: form.specGroups.map((g, i) =>
+                          i === index ? { ...g, title: e.target.value } : g
+                        ),
+                      })}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0 text-red-400 hover:text-red-600 shrink-0"
+                      onClick={() => setForm({
+                        ...form,
+                        specGroups: form.specGroups.filter((_, i) => i !== index),
+                      })}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                  <FeatureMultiSelect
+                    label="Features"
+                    options={specOptionsFor(group.title, group.items)}
+                    selected={group.items}
+                    onChange={(items) => setForm({
+                      ...form,
+                      specGroups: form.specGroups.map((g, i) =>
+                        i === index ? { ...g, items } : g
+                      ),
+                    })}
+                  />
+                </div>
+              ))}
+
+              <Separator />
+
+              <Label>Subscription finance (per year)</Label>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Years *</Label>
+                  <Select
+                    value={form.subscriptionYears}
+                    onValueChange={(v) => {
+                      const years = v ?? "1";
+                      const months = String(Number(years) * 12);
+                      setForm({
+                        ...form,
+                        subscriptionYears: years,
+                        durationMonths: months,
+                        timelineValue: months,
+                        timelineUnit: "Months",
+                      });
+                    }}
+                  >
+                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {SUBSCRIPTION_YEARS.map((y) => (
+                        <SelectItem key={y} value={y}>{y} year{y === "1" ? "" : "s"}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Duration (months) *</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={form.durationMonths}
+                    onChange={(e) => setForm({
+                      ...form,
+                      durationMonths: e.target.value,
+                      timelineValue: e.target.value,
+                      timelineUnit: "Months",
+                    })}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Unit price (₹ / month) *</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    placeholder="1299"
+                    value={form.unitPrice}
+                    onChange={(e) => setForm({ ...form, unitPrice: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Renewal price (₹ / month)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    placeholder="1699"
+                    value={form.renewalPrice}
+                    onChange={(e) => setForm({ ...form, renewalPrice: e.target.value })}
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-gray-500">
+                Total = unit price × duration
+                {Number(form.unitPrice) > 0 && Number(form.durationMonths) > 0
+                  ? ` → ₹${(Number(form.unitPrice) * Number(form.durationMonths)).toLocaleString("en-IN")}`
+                  : ""}
+              </p>
+              <div className="space-y-1.5">
+                <Label>Finance note</Label>
+                <Input
+                  placeholder="Future Renewal Rate: ₹1,699/month."
+                  value={form.financeNote}
+                  onChange={(e) => setForm({ ...form, financeNote: e.target.value })}
+                />
+              </div>
+            </>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
@@ -477,33 +778,37 @@ export default function QuotationEditor({
             <p className="mt-1">Payable incl. GST: <strong>₹{money.total.toLocaleString("en-IN")}</strong></p>
           </div>
 
-          <FeatureMultiSelect
-            label="Features we will deliver"
-            hint="Tick what is in scope, or add a custom line."
-            options={featureOptions}
-            selected={form.features}
-            onChange={(features) => setForm({ ...form, features })}
-          />
+          {!isSub && (
+            <FeatureMultiSelect
+              label="Features we will deliver"
+              hint="Tick what is in scope, or add a custom line."
+              options={featureOptions}
+              selected={form.features}
+              onChange={(features) => setForm({ ...form, features })}
+            />
+          )}
 
           <div className="space-y-1.5">
-            <Label>Notes</Label>
+            <Label>{isSub ? "Additional notes" : "Notes"}</Label>
             <Textarea
               rows={3}
               className="resize-none"
-              placeholder="Optional notes for this client"
+              placeholder={isSub ? "Optional notes for this client" : "Optional notes for this client"}
               value={form.notes}
               onChange={(e) => setForm({ ...form, notes: e.target.value })}
             />
           </div>
-          <div className="space-y-1.5">
-            <Label>Commitment</Label>
-            <Textarea
-              rows={3}
-              className="resize-none"
-              value={form.commitment}
-              onChange={(e) => setForm({ ...form, commitment: e.target.value })}
-            />
-          </div>
+          {!isSub && (
+            <div className="space-y-1.5">
+              <Label>Commitment</Label>
+              <Textarea
+                rows={3}
+                className="resize-none"
+                value={form.commitment}
+                onChange={(e) => setForm({ ...form, commitment: e.target.value })}
+              />
+            </div>
+          )}
 
           <div className="space-y-1.5">
             <Label>Status *</Label>
@@ -536,12 +841,24 @@ export default function QuotationEditor({
               PDF
             </Button>
             {savedId && (
-              <Link href={`/invoices/new?quoteId=${savedId}`} className="flex-1">
-                <Button type="button" variant="outline" className="w-full">
-                  <FileText className="w-4 h-4 mr-2" />
-                  Create invoice
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="flex-1"
+                  onClick={handleCreateProject}
+                  disabled={creatingProject}
+                >
+                  <FolderKanban className="w-4 h-4 mr-2" />
+                  {creatingProject ? "Creating..." : "Create project"}
                 </Button>
-              </Link>
+                <Link href={`/invoices/new?quoteId=${savedId}`} className="flex-1">
+                  <Button type="button" variant="outline" className="w-full">
+                    <FileText className="w-4 h-4 mr-2" />
+                    Create invoice
+                  </Button>
+                </Link>
+              </>
             )}
           </div>
         </form>

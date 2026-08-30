@@ -17,14 +17,20 @@ export async function POST(request: Request) {
   const denied = await requireQuotationAccess();
   if (denied) return denied;
 
-  await connectDB();
-  const body = await request.json();
-  const invalid = validateQuotationBody(body);
-  if (invalid) {
-    return NextResponse.json({ error: invalid }, { status: 400 });
-  }
+  try {
+    await connectDB();
+    const body = await request.json();
+    const invalid = validateQuotationBody(body);
+    if (invalid) {
+      return NextResponse.json({ error: invalid }, { status: 400 });
+    }
 
-  const quote = new Quotation(toQuotationFields(body));
-  await quote.save();
-  return NextResponse.json(quote, { status: 201 });
+    const quote = new Quotation(toQuotationFields(body));
+    await quote.save();
+    return NextResponse.json(quote.toObject(), { status: 201 });
+  } catch (err) {
+    console.error("[quotations POST]", err);
+    const message = err instanceof Error ? err.message : "Failed to save quotation.";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }

@@ -21,6 +21,8 @@ export interface IProject extends Document {
   recurringBy?: RecurringBy | null;
   recurringDuration?: number | null;
   renewalDate?: Date | null;
+  quoteId?: Types.ObjectId | null;
+  quoteNumber?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -47,6 +49,8 @@ const ProjectSchema = new Schema<IProject>(
     recurringBy: { type: String, enum: ["Monthly", "Yearly"] },
     recurringDuration: { type: Number, min: 1 },
     renewalDate: { type: Date },
+    quoteId: { type: Schema.Types.ObjectId, ref: "Quotation", default: null },
+    quoteNumber: { type: String, default: "" },
   },
   { timestamps: true }
 );
