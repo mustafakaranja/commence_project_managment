@@ -1,3 +1,5 @@
+import { normalizeQuoteStatus } from "@/lib/quotation-catalog";
+
 export type QuotationServiceBody = {
   title?: string;
   description?: string;
@@ -22,6 +24,7 @@ type QuotationBody = {
   validUntil?: string;
   notes?: string;
   commitment?: string;
+  status?: string;
 };
 
 export function quotationTotals(
@@ -83,5 +86,6 @@ export function toQuotationFields(body: QuotationBody) {
     validUntil: new Date(String(body.validUntil)),
     notes: body.notes ?? "",
     commitment: body.commitment ?? "",
+    status: normalizeQuoteStatus(body.status),
   };
 }

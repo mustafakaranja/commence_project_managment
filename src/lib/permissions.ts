@@ -72,6 +72,8 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "view_projects",
     "view_clients",
     "view_invoices",
+    "add_invoice",
+    "edit_invoice",
     "view_members",
     "view_po",
     "view_expenses",

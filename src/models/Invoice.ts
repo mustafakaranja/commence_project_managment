@@ -1,5 +1,10 @@
 import mongoose, { Schema, Document, Model, Types } from "mongoose";
 
+export interface IInvoiceItem {
+  description: string;
+  amount: number;
+}
+
 export interface IInvoice extends Document {
   invoiceNumber: string;
   clientId: Types.ObjectId;
@@ -8,9 +13,21 @@ export interface IInvoice extends Document {
   amount: number;
   taxAmount?: number;
   invoiceFor: string;
+  items: IInvoiceItem[];
+  quoteId?: Types.ObjectId | null;
+  quoteNumber?: string;
+  status: string;
   createdAt: Date;
   updatedAt: Date;
 }
+
+const InvoiceItemSchema = new Schema<IInvoiceItem>(
+  {
+    description: { type: String, required: true, trim: true },
+    amount: { type: Number, required: true, default: 0 },
+  },
+  { _id: false }
+);
 
 const InvoiceSchema = new Schema<IInvoice>(
   {
@@ -21,11 +38,14 @@ const InvoiceSchema = new Schema<IInvoice>(
     amount: { type: Number, required: true },
     taxAmount: { type: Number, default: 0 },
     invoiceFor: { type: String, required: true },
+    items: { type: [InvoiceItemSchema], default: [] },
+    quoteId: { type: Schema.Types.ObjectId, ref: "Quotation", default: null },
+    quoteNumber: { type: String, default: "" },
+    status: { type: String, enum: ["Draft", "Unpaid", "Paid", "Close"], default: "Draft" },
   },
   { timestamps: true }
 );
 
-// Auto-generate invoice number before saving
 InvoiceSchema.pre("save", async function () {
   if (!this.invoiceNumber) {
     const year = new Date().getFullYear();

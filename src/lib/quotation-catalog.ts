@@ -9,6 +9,15 @@ export const QUOTE_TYPES = [
 
 export const TIMELINE_UNITS = ["Days", "Weeks", "Months"] as const;
 
+export const QUOTE_STATUSES = ["Draft", "Open", "Pending", "Approved", "Close"] as const;
+export type QuoteStatus = (typeof QUOTE_STATUSES)[number];
+
+export function normalizeQuoteStatus(value?: string | null): QuoteStatus {
+  return (QUOTE_STATUSES as readonly string[]).includes(value ?? "")
+    ? (value as QuoteStatus)
+    : "Draft";
+}
+
 export const TECH_OPTIONS = [
   "WordPress",
   "Laravel",

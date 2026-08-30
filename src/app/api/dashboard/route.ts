@@ -6,6 +6,7 @@ import Project from "@/models/Project";
 import Client from "@/models/Client";
 import Member from "@/models/Member";
 import { isRenewalDue } from "@/lib/renewal";
+import { isClientActive } from "@/lib/client-status";
 
 type LeanInvoice = {
   amount: number;
@@ -107,7 +108,7 @@ export async function GET(request: Request) {
   const invoiceCount = periodInvoices.length;
   const avgInvoiceValue = invoiceCount > 0 ? totalRevenue / invoiceCount : 0;
 
-  const activeClients = clients.filter((c) => !c.endDate).length;
+  const activeClients = clients.filter((c) => isClientActive(c.endDate)).length;
   const newClients = clients.filter((c) => inRange(c.onboardDate, start, end)).length;
   const endedClients = clients.filter((c) => c.endDate && inRange(c.endDate, start, end)).length;
   const billedClientIds = new Set(

@@ -16,10 +16,10 @@ import { Separator } from "@/components/ui/separator";
 import FeatureMultiSelect from "@/components/FeatureMultiSelect";
 import QuotationPreview, { type QuotationPreviewData } from "@/components/QuotationPreview";
 import {
-  QUOTE_TYPES, TECH_OPTIONS, TIMELINE_UNITS, featuresForType,
+  QUOTE_TYPES, QUOTE_STATUSES, TECH_OPTIONS, TIMELINE_UNITS, featuresForType,
 } from "@/lib/quotation-catalog";
 import { quotationTotals } from "@/lib/quotation-payload";
-import { ArrowLeft, Download, Plus, Save, Trash2 } from "lucide-react";
+import { ArrowLeft, Download, FileText, Plus, Save, Trash2 } from "lucide-react";
 
 type ServiceRow = { title: string; description: string; amount: string };
 
@@ -42,6 +42,7 @@ type FormState = {
   validUntil: string;
   notes: string;
   commitment: string;
+  status: string;
 };
 
 const today = () => new Date().toISOString().split("T")[0];
@@ -70,6 +71,7 @@ export function emptyQuotationForm(): FormState {
     notes: "",
     commitment:
       "We are committed to a clean rollout: agreed scope, timely delivery, and support through go-live.",
+    status: "Draft",
   };
 }
 
@@ -91,6 +93,7 @@ export function quotationToForm(quote: {
   validUntil?: string;
   notes?: string;
   commitment?: string;
+  status?: string;
 }): FormState {
   const known = (QUOTE_TYPES as readonly string[]).includes(quote.type ?? "");
   return {
@@ -116,6 +119,7 @@ export function quotationToForm(quote: {
     validUntil: quote.validUntil ? String(quote.validUntil).split("T")[0] : plus30(),
     notes: quote.notes ?? "",
     commitment: quote.commitment ?? "",
+    status: quote.status ?? "Draft",
   };
 }
 
@@ -173,6 +177,7 @@ function payloadFromForm(form: FormState) {
     validUntil: form.validUntil,
     notes: form.notes,
     commitment: form.commitment,
+    status: form.status,
   };
 }
 
@@ -192,6 +197,7 @@ export default function QuotationEditor({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [savedNumber, setSavedNumber] = useState<string | null>(initialNumber ?? null);
+  const [savedId, setSavedId] = useState<string | null>(quoteId ?? null);
   const [form, setForm] = useState<FormState>(initial ?? emptyQuotationForm());
 
   const quoteNumber = savedNumber ?? "QT-DRAFT";
@@ -247,6 +253,7 @@ export default function QuotationEditor({
     if (res.ok) {
       const saved = await res.json();
       setSavedNumber(saved.quoteNumber);
+      setSavedId(saved._id);
       if (mode === "edit") router.push("/quotations");
     } else {
       const d = await res.json();
@@ -498,16 +505,28 @@ export default function QuotationEditor({
             />
           </div>
 
+          <div className="space-y-1.5">
+            <Label>Status *</Label>
+            <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v ?? "Draft" })}>
+              <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {QUOTE_STATUSES.map((s) => (
+                  <SelectItem key={s} value={s}>{s}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           {error && (
             <p className="text-sm text-red-500 bg-red-50 border border-red-200 rounded px-3 py-2">{error}</p>
           )}
           {mode === "create" && savedNumber && (
             <p className="text-sm text-[#0F6E56] bg-[#E1F5EE] rounded px-3 py-2">
-              Saved as {savedNumber}. You can download the PDF now.
+              Saved as {savedNumber}. You can download the PDF or create an invoice from this quotation.
             </p>
           )}
 
-          <div className="flex gap-2 pb-6">
+          <div className="flex flex-wrap gap-2 pb-6">
             <Button type="submit" className="flex-1 bg-[#0F6E56] hover:bg-[#0d5e49]" disabled={saving}>
               <Save className="w-4 h-4 mr-2" />
               {saving ? "Saving..." : mode === "edit" ? "Save changes" : savedNumber ? "Saved" : "Save quotation"}
@@ -516,6 +535,14 @@ export default function QuotationEditor({
               <Download className="w-4 h-4 mr-2" />
               PDF
             </Button>
+            {savedId && (
+              <Link href={`/invoices/new?quoteId=${savedId}`} className="flex-1">
+                <Button type="button" variant="outline" className="w-full">
+                  <FileText className="w-4 h-4 mr-2" />
+                  Create invoice
+                </Button>
+              </Link>
+            )}
           </div>
         </form>
       </div>

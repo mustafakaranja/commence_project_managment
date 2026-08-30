@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongoose";
 import Invoice from "@/models/Invoice";
+import { toInvoiceFields, validateInvoiceBody } from "@/lib/invoice-payload";
 
 export async function PUT(
   request: Request,
@@ -9,16 +10,14 @@ export async function PUT(
   await connectDB();
   const { id } = await params;
   const body = await request.json();
+  const invalid = validateInvoiceBody(body);
+  if (invalid) {
+    return NextResponse.json({ error: invalid }, { status: 400 });
+  }
+
   const invoice = await Invoice.findByIdAndUpdate(
     id,
-    {
-      clientId: body.clientId,
-      invoiceDate: new Date(body.invoiceDate),
-      address: body.address,
-      amount: Number(body.amount),
-      taxAmount: body.taxAmount ? Number(body.taxAmount) : 0,
-      invoiceFor: body.invoiceFor,
-    },
+    { $set: toInvoiceFields(body) },
     { new: true }
   ).populate("clientId", "name");
   if (!invoice) return NextResponse.json({ error: "Not found" }, { status: 404 });

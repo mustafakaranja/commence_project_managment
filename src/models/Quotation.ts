@@ -25,6 +25,7 @@ export interface IQuotation extends Document {
   validUntil: Date;
   notes?: string;
   commitment?: string;
+  status: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -58,6 +59,11 @@ const QuotationSchema = new Schema<IQuotation>(
     validUntil: { type: Date, required: true },
     notes: { type: String, default: "" },
     commitment: { type: String, default: "" },
+    status: {
+      type: String,
+      enum: ["Draft", "Open", "Pending", "Approved", "Close"],
+      default: "Draft",
+    },
   },
   { timestamps: true }
 );

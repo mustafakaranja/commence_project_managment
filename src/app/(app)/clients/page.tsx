@@ -23,6 +23,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Pencil, Trash2, Users } from "lucide-react";
 import { format, differenceInMonths } from "date-fns";
+import { isClientActive } from "@/lib/client-status";
 
 interface Client {
   _id: string;
@@ -154,7 +155,7 @@ export default function ClientsPage() {
                   const start = new Date(c.onboardDate);
                   const end = c.endDate ? new Date(c.endDate) : new Date();
                   const months = differenceInMonths(end, start);
-                  const isActive = !c.endDate;
+                  const isActive = isClientActive(c.endDate);
                   return (
                     <TableRow key={c._id}>
                       <TableCell className="font-medium">{c.name}</TableCell>

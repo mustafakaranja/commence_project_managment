@@ -9,10 +9,12 @@ import {
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { Plus, ScrollText, Pencil, Trash2, Download } from "lucide-react";
+import { Plus, ScrollText, Pencil, Trash2, Download, FileText } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { hasPermission } from "@/lib/permissions";
 import { quotationTotals } from "@/lib/quotation-payload";
+import { normalizeQuoteStatus } from "@/lib/quotation-catalog";
+import { statusBadgeClass } from "@/lib/status-style";
 import QuotationPrintSheet from "@/components/QuotationPrintSheet";
 import type { QuotationPreviewData } from "@/components/QuotationPreview";
 
@@ -36,6 +38,7 @@ interface Quotation {
   validUntil: string;
   notes?: string;
   commitment?: string;
+  status?: string;
 }
 
 function toPreview(quote: Quotation): QuotationPreviewData {
@@ -135,14 +138,15 @@ export default function QuotationsPage() {
               <TableHead>Type</TableHead>
               <TableHead>Timeline</TableHead>
               <TableHead>Total</TableHead>
-              <TableHead className="w-32 text-right">Actions</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="w-40 text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading
               ? Array.from({ length: 4 }).map((_, i) => (
                   <TableRow key={i}>
-                    {Array.from({ length: 7 }).map((_, j) => (
+                    {Array.from({ length: 8 }).map((_, j) => (
                       <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
                     ))}
                   </TableRow>
@@ -150,7 +154,7 @@ export default function QuotationsPage() {
               : quotes.length === 0
               ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-16 text-gray-400">
+                  <TableCell colSpan={8} className="text-center py-16 text-gray-400">
                     <ScrollText className="w-10 h-10 mx-auto mb-3 opacity-30" />
                     <p className="font-medium">No quotations yet</p>
                     <p className="text-sm mt-1">Click &quot;Add quotation&quot; to create a client proposal.</p>
@@ -176,8 +180,20 @@ export default function QuotationsPage() {
                       <TableCell className="font-medium">
                         ₹{money.total.toLocaleString("en-IN")}
                       </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={statusBadgeClass(normalizeQuoteStatus(quote.status))}>
+                          {normalizeQuoteStatus(quote.status)}
+                        </Badge>
+                      </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
+                          {can("add_invoice") && (
+                            <Link href={`/invoices/new?quoteId=${quote._id}`}>
+                              <Button variant="ghost" size="sm" title="Create invoice">
+                                <FileText className="w-3.5 h-3.5" />
+                              </Button>
+                            </Link>
+                          )}
                           <Button variant="ghost" size="sm" onClick={() => setPreview(quote)}>
                             <Download className="w-3.5 h-3.5" />
                           </Button>

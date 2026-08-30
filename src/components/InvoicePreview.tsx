@@ -8,6 +8,8 @@ export interface InvoicePreviewData {
   amount?: number;
   taxAmount?: number;
   invoiceFor?: string;
+  items?: { description: string; amount: number }[];
+  quoteNumber?: string;
 }
 
 function toWords(n: number): string {
@@ -23,8 +25,21 @@ function toWords(n: number): string {
   return toWords(Math.floor(n / 10000000)) + " Crore" + (n % 10000000 ? " " + toWords(n % 10000000) : "");
 }
 
+function lineItems(data: InvoicePreviewData) {
+  if (data.items && data.items.length > 0) return data.items;
+  if (data.invoiceFor) return [{ description: data.invoiceFor, amount: data.amount ?? 0 }];
+  return [];
+}
+
+function bullets(text: string) {
+  const lines = text.split("\n").map((line) => line.replace(/^[-•]\s*/, "").trim()).filter(Boolean);
+  return { title: lines[0] || "—", points: lines.slice(1) };
+}
+
 export default function InvoicePreview({ data }: { data: InvoicePreviewData }) {
-  const total = (data.amount ?? 0) + (data.taxAmount ?? 0);
+  const items = lineItems(data);
+  const subtotal = items.reduce((sum, row) => sum + (row.amount || 0), 0);
+  const total = subtotal + (data.taxAmount ?? 0);
   const dateStr = data.invoiceDate
     ? format(new Date(data.invoiceDate), "dd MMM yyyy")
     : format(new Date(), "dd MMM yyyy");
@@ -51,6 +66,7 @@ export default function InvoicePreview({ data }: { data: InvoicePreviewData }) {
           <span style={{ background: "#0F6E56", color: "#fff", fontSize: 11, padding: "3px 10px", borderRadius: 4, display: "inline-block", marginBottom: 6, letterSpacing: 0.5, textTransform: "uppercase" }}>Invoice</span>
           <p style={{ fontSize: 13, color: "#666", lineHeight: 1.8 }}>
             <strong>{invNum}</strong><br />Date: {dateStr}
+            {data.quoteNumber ? <><br />Quote: {data.quoteNumber}</> : null}
           </p>
         </div>
       </div>
@@ -78,10 +94,35 @@ export default function InvoicePreview({ data }: { data: InvoicePreviewData }) {
             </tr>
           </thead>
           <tbody>
-            <tr style={{ borderBottom: "0.5px solid #e2e8f0" }}>
-              <td style={{ padding: 10, lineHeight: 1.6 }}>{data.invoiceFor || "—"}</td>
+            {items.length === 0 ? (
+              <tr style={{ borderBottom: "0.5px solid #e2e8f0" }}>
+                <td style={{ padding: 10 }}>—</td>
+                <td style={{ padding: 10, textAlign: "right", color: "#888" }}>₹0</td>
+              </tr>
+            ) : items.map((row, index) => {
+              const { title, points } = bullets(row.description);
+              return (
+                <tr key={`${title}-${index}`} style={{ borderBottom: "0.5px solid #e2e8f0" }}>
+                  <td style={{ padding: 10, lineHeight: 1.6, verticalAlign: "top" }}>
+                    <div>{title}</div>
+                    {points.length > 0 && (
+                      <ul style={{ margin: "6px 0 0", paddingLeft: 16, color: "#555", fontSize: 13 }}>
+                        {points.map((point) => (
+                          <li key={point}>{point}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </td>
+                  <td style={{ padding: 10, textAlign: "right", fontWeight: 500, color: "#0F6E56", whiteSpace: "nowrap", verticalAlign: "top" }}>
+                    {row.amount > 0 ? `₹${row.amount.toLocaleString("en-IN")}` : "Included"}
+                  </td>
+                </tr>
+              );
+            })}
+            <tr style={{ background: "#f8fafc" }}>
+              <td style={{ padding: 10, fontWeight: 500 }}>Subtotal</td>
               <td style={{ padding: 10, textAlign: "right", fontWeight: 500, color: "#0F6E56" }}>
-                ₹{(data.amount ?? 0).toLocaleString("en-IN")}
+                ₹{subtotal.toLocaleString("en-IN")}
               </td>
             </tr>
             {(data.taxAmount ?? 0) > 0 && (

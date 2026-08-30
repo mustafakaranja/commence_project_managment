@@ -16,9 +16,13 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import InvoiceLineItems, { type InvoiceItemRow } from "@/components/InvoiceLineItems";
 import { Plus, FileText, Pencil, Trash2, Eye } from "lucide-react";
 import { format } from "date-fns";
 import InvoicePrintSheet from "@/components/InvoicePrintSheet";
+import { Badge } from "@/components/ui/badge";
+import { INVOICE_STATUSES, normalizeInvoiceStatus } from "@/lib/invoice-payload";
+import { statusBadgeClass } from "@/lib/status-style";
 
 interface IClient { _id: string; name: string; }
 interface Invoice {
@@ -30,6 +34,10 @@ interface Invoice {
   taxAmount: number;
   invoiceFor: string;
   address: string;
+  items?: { description: string; amount: number }[];
+  quoteId?: string | null;
+  quoteNumber?: string;
+  status?: string;
 }
 
 export default function InvoicesPage() {
@@ -44,7 +52,11 @@ export default function InvoicesPage() {
   const [previewTarget, setPreviewTarget] = useState<Invoice | null>(null);
 
   const [form, setForm] = useState({
-    clientId: "", invoiceDate: "", address: "", amount: "", taxAmount: "", invoiceFor: "",
+    clientId: "", invoiceDate: "", address: "", taxAmount: "", invoiceFor: "",
+    items: [{ description: "", amount: "" }] as InvoiceItemRow[],
+    quoteId: "",
+    quoteNumber: "",
+    status: "Draft",
   });
 
   useEffect(() => {
@@ -65,13 +77,19 @@ export default function InvoicesPage() {
 
   const openEdit = (inv: Invoice) => {
     setEditTarget(inv);
+    const items = inv.items?.length
+      ? inv.items.map((row) => ({ description: row.description, amount: String(row.amount ?? "") }))
+      : [{ description: inv.invoiceFor, amount: String(inv.amount ?? "") }];
     setForm({
       clientId: inv.clientId?._id ?? "",
       invoiceDate: inv.invoiceDate.split("T")[0],
       address: inv.address,
-      amount: String(inv.amount),
       taxAmount: String(inv.taxAmount ?? ""),
       invoiceFor: inv.invoiceFor,
+      items,
+      quoteId: inv.quoteId ?? "",
+      quoteNumber: inv.quoteNumber ?? "",
+      status: normalizeInvoiceStatus(inv.status),
     });
     setError("");
     setOpen(true);
@@ -82,10 +100,23 @@ export default function InvoicesPage() {
     setError("");
     if (!editTarget) return;
     setSaving(true);
+    const items = form.items
+      .filter((row) => row.description.trim())
+      .map((row) => ({ description: row.description.trim(), amount: Number(row.amount) || 0 }));
     const res = await fetch(`/api/invoices/${editTarget._id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
+      body: JSON.stringify({
+        clientId: form.clientId,
+        invoiceDate: form.invoiceDate,
+        address: form.address,
+        invoiceFor: form.invoiceFor,
+        taxAmount: form.taxAmount,
+        items,
+        quoteId: form.quoteId || null,
+        quoteNumber: form.quoteNumber || "",
+        status: form.status,
+      }),
     });
     setSaving(false);
     if (res.ok) { setOpen(false); refresh(); }
@@ -124,6 +155,7 @@ export default function InvoicesPage() {
               <TableHead>Amount</TableHead>
               <TableHead>Tax</TableHead>
               <TableHead>Total</TableHead>
+              <TableHead>Status</TableHead>
               <TableHead className="w-24 text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -131,7 +163,7 @@ export default function InvoicesPage() {
             {loading
               ? Array.from({ length: 4 }).map((_, i) => (
                   <TableRow key={i}>
-                    {Array.from({ length: 8 }).map((_, j) => (
+                    {Array.from({ length: 9 }).map((_, j) => (
                       <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
                     ))}
                   </TableRow>
@@ -139,7 +171,7 @@ export default function InvoicesPage() {
               : invoices.length === 0
               ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-12 text-gray-400">
+                  <TableCell colSpan={9} className="text-center py-12 text-gray-400">
                     <FileText className="w-8 h-8 mx-auto mb-2 opacity-40" />
                     No invoices yet.{" "}
                     <Link href="/invoices/new" className="text-[#0F6E56] underline">Create your first invoice</Link>
@@ -157,6 +189,11 @@ export default function InvoicesPage() {
                       <TableCell>₹{inv.amount.toLocaleString("en-IN")}</TableCell>
                       <TableCell>₹{(inv.taxAmount ?? 0).toLocaleString("en-IN")}</TableCell>
                       <TableCell className="font-semibold">₹{total.toLocaleString("en-IN")}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={statusBadgeClass(normalizeInvoiceStatus(inv.status))}>
+                          {normalizeInvoiceStatus(inv.status)}
+                        </Badge>
+                      </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
                           <Button
@@ -199,13 +236,15 @@ export default function InvoicesPage() {
             amount: previewTarget.amount,
             taxAmount: previewTarget.taxAmount,
             invoiceFor: previewTarget.invoiceFor,
+            items: previewTarget.items,
+            quoteNumber: previewTarget.quoteNumber,
           }}
         />
       )}
 
       {/* Edit Dialog */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Invoice {editTarget?.invoiceNumber}</DialogTitle>
           </DialogHeader>
@@ -234,21 +273,33 @@ export default function InvoicesPage() {
               <Input value={form.invoiceFor} onChange={(e) => setForm({ ...form, invoiceFor: e.target.value })} />
             </div>
             <Separator />
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Base Amount (₹) *</Label>
-                <Input type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Tax Amount (₹)</Label>
-                <Input type="number" value={form.taxAmount} onChange={(e) => setForm({ ...form, taxAmount: e.target.value })} />
-              </div>
+            <InvoiceLineItems
+              items={form.items}
+              onChange={(items) => setForm({ ...form, items })}
+            />
+            <div className="space-y-1.5">
+              <Label>Tax Amount (₹)</Label>
+              <Input type="number" value={form.taxAmount} onChange={(e) => setForm({ ...form, taxAmount: e.target.value })} />
             </div>
             <div className="bg-[#E1F5EE] rounded-lg px-4 py-3">
               <p className="text-xs text-[#0F6E56] font-medium">Net Total</p>
               <p className="text-xl font-bold text-[#0F6E56]">
-                ₹{((parseFloat(form.amount) || 0) + (parseFloat(form.taxAmount) || 0)).toLocaleString("en-IN")}
+                ₹{(
+                  form.items.reduce((sum, row) => sum + (Number(row.amount) || 0), 0)
+                  + (parseFloat(form.taxAmount) || 0)
+                ).toLocaleString("en-IN")}
               </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Status *</Label>
+              <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v ?? "Draft" })}>
+                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {INVOICE_STATUSES.map((s) => (
+                    <SelectItem key={s} value={s}>{s}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             {error && <p className="text-sm text-red-500 bg-red-50 border border-red-200 rounded px-3 py-2">{error}</p>}
             <DialogFooter>
