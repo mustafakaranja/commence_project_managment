@@ -17,6 +17,12 @@ export interface IInvoice extends Document {
   quoteId?: Types.ObjectId | null;
   quoteNumber?: string;
   status: string;
+  showBankDetails?: boolean;
+  includeRazorpayLink?: boolean;
+  razorpayPaymentLinkId?: string;
+  razorpayShortUrl?: string;
+  razorpayPaymentStatus?: string;
+  razorpayPaymentId?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -42,16 +48,29 @@ const InvoiceSchema = new Schema<IInvoice>(
     quoteId: { type: Schema.Types.ObjectId, ref: "Quotation", default: null },
     quoteNumber: { type: String, default: "" },
     status: { type: String, enum: ["Draft", "Unpaid", "Paid", "Close"], default: "Draft" },
+    showBankDetails: { type: Boolean, default: true },
+    includeRazorpayLink: { type: Boolean, default: false },
+    razorpayPaymentLinkId: { type: String, default: "" },
+    razorpayShortUrl: { type: String, default: "" },
+    razorpayPaymentStatus: { type: String, default: "" },
+    razorpayPaymentId: { type: String, default: "" },
   },
   { timestamps: true }
 );
 
 InvoiceSchema.pre("save", async function () {
-  if (!this.invoiceNumber) {
-    const year = new Date().getFullYear();
-    const count = await mongoose.models.Invoice.countDocuments();
-    this.invoiceNumber = `INV-${year}-${String(count + 1).padStart(3, "0")}`;
-  }
+  if (this.invoiceNumber) return;
+  const year = new Date().getFullYear();
+  const prefix = `INV-${year}-`;
+  const existing = await mongoose.models.Invoice.find(
+    { invoiceNumber: new RegExp(`^${prefix}\\d+$`) },
+    { invoiceNumber: 1 }
+  ).lean();
+  const max = existing.reduce((highest, row) => {
+    const n = parseInt(String(row.invoiceNumber ?? "").slice(prefix.length), 10);
+    return Number.isFinite(n) && n > highest ? n : highest;
+  }, 0);
+  this.invoiceNumber = `${prefix}${String(max + 1).padStart(3, "0")}`;
 });
 
 const Invoice: Model<IInvoice> =

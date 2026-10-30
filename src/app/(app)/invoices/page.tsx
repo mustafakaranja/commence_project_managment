@@ -17,7 +17,8 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import InvoiceLineItems, { type InvoiceItemRow } from "@/components/InvoiceLineItems";
-import { Plus, FileText, Pencil, Trash2, Eye } from "lucide-react";
+import InvoicePaymentToggles from "@/components/InvoicePaymentToggles";
+import { Plus, FileText, Pencil, Trash2, Eye, Link2 } from "lucide-react";
 import { format } from "date-fns";
 import InvoicePrintSheet from "@/components/InvoicePrintSheet";
 import { Badge } from "@/components/ui/badge";
@@ -38,6 +39,10 @@ interface Invoice {
   quoteId?: string | null;
   quoteNumber?: string;
   status?: string;
+  razorpayShortUrl?: string;
+  razorpayPaymentStatus?: string;
+  showBankDetails?: boolean;
+  includeRazorpayLink?: boolean;
 }
 
 export default function InvoicesPage() {
@@ -50,6 +55,7 @@ export default function InvoicesPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [previewTarget, setPreviewTarget] = useState<Invoice | null>(null);
+  const [payBusyId, setPayBusyId] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     clientId: "", invoiceDate: "", address: "", taxAmount: "", invoiceFor: "",
@@ -57,6 +63,8 @@ export default function InvoicesPage() {
     quoteId: "",
     quoteNumber: "",
     status: "Draft",
+    showBankDetails: true,
+    includeRazorpayLink: false,
   });
 
   useEffect(() => {
@@ -90,6 +98,8 @@ export default function InvoicesPage() {
       quoteId: inv.quoteId ?? "",
       quoteNumber: inv.quoteNumber ?? "",
       status: normalizeInvoiceStatus(inv.status),
+      showBankDetails: inv.showBankDetails !== false,
+      includeRazorpayLink: Boolean(inv.includeRazorpayLink),
     });
     setError("");
     setOpen(true);
@@ -116,6 +126,8 @@ export default function InvoicesPage() {
         quoteId: form.quoteId || null,
         quoteNumber: form.quoteNumber || "",
         status: form.status,
+        showBankDetails: form.showBankDetails,
+        includeRazorpayLink: form.includeRazorpayLink,
       }),
     });
     setSaving(false);
@@ -127,6 +139,35 @@ export default function InvoicesPage() {
     setDeleteId(id);
     await fetch(`/api/invoices/${id}`, { method: "DELETE" });
     setDeleteId(null);
+    refresh();
+  };
+
+  const createPayLink = async (inv: Invoice) => {
+    if (inv.razorpayShortUrl) {
+      window.open(inv.razorpayShortUrl, "_blank");
+      return;
+    }
+    setPayBusyId(inv._id);
+    setError("");
+    const res = await fetch(`/api/invoices/${inv._id}/pay-link`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    const payload = await res.json().catch(() => ({}));
+    setPayBusyId(null);
+    if (!res.ok) {
+      setError(payload.error ?? "Failed to create Razorpay pay link.");
+      return;
+    }
+    const payUrl = payload.payUrl as string | undefined;
+    if (payUrl) {
+      setInvoices((prev) =>
+        prev.map((row) => row._id === inv._id ? { ...row, razorpayShortUrl: payUrl, status: row.status === "Draft" ? "Unpaid" : row.status } : row)
+      );
+      setPreviewTarget((prev) => prev && prev._id === inv._id ? { ...prev, razorpayShortUrl: payUrl } : prev);
+      window.open(payUrl, "_blank");
+    }
     refresh();
   };
 
@@ -143,6 +184,10 @@ export default function InvoicesPage() {
           </Button>
         </Link>
       </div>
+
+      {error && !open && (
+        <p className="mb-4 text-sm text-red-500 bg-red-50 border border-red-200 rounded px-3 py-2">{error}</p>
+      )}
 
       <div className="bg-white rounded-xl border shadow-sm">
         <Table>
@@ -198,6 +243,15 @@ export default function InvoicesPage() {
                         <div className="flex items-center justify-end gap-1">
                           <Button
                             variant="ghost" size="sm"
+                            onClick={() => createPayLink(inv)}
+                            disabled={payBusyId === inv._id}
+                            title={inv.razorpayShortUrl ? "Open Razorpay pay link" : "Generate Razorpay pay link"}
+                            className="text-[#0F6E56] hover:text-[#0d5e49] hover:bg-[#E1F5EE]"
+                          >
+                            <Link2 className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost" size="sm"
                             onClick={() => setPreviewTarget(inv)}
                             className="text-[#0F6E56] hover:text-[#0d5e49] hover:bg-[#E1F5EE]"
                           >
@@ -228,6 +282,7 @@ export default function InvoicesPage() {
         <InvoicePrintSheet
           open={!!previewTarget}
           onClose={() => setPreviewTarget(null)}
+          invoiceId={previewTarget._id}
           data={{
             invoiceNumber: previewTarget.invoiceNumber,
             clientName: previewTarget.clientId?.name,
@@ -238,6 +293,15 @@ export default function InvoicesPage() {
             invoiceFor: previewTarget.invoiceFor,
             items: previewTarget.items,
             quoteNumber: previewTarget.quoteNumber,
+            showBankDetails: previewTarget.showBankDetails,
+            includeRazorpayLink: previewTarget.includeRazorpayLink,
+            razorpayShortUrl: previewTarget.razorpayShortUrl,
+          }}
+          onPayLinkCreated={(payUrl) => {
+            setPreviewTarget((prev) => prev ? { ...prev, razorpayShortUrl: payUrl } : prev);
+            setInvoices((prev) =>
+              prev.map((row) => row._id === previewTarget._id ? { ...row, razorpayShortUrl: payUrl } : row)
+            );
           }}
         />
       )}
@@ -301,6 +365,11 @@ export default function InvoicesPage() {
                 </SelectContent>
               </Select>
             </div>
+            <InvoicePaymentToggles
+              showBankDetails={form.showBankDetails}
+              includeRazorpayLink={form.includeRazorpayLink}
+              onChange={(next) => setForm({ ...form, ...next })}
+            />
             {error && <p className="text-sm text-red-500 bg-red-50 border border-red-200 rounded px-3 py-2">{error}</p>}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
