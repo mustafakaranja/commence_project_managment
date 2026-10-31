@@ -10,9 +10,6 @@ export interface InvoicePreviewData {
   invoiceFor?: string;
   items?: { description: string; amount: number }[];
   quoteNumber?: string;
-  showBankDetails?: boolean;
-  includeRazorpayLink?: boolean;
-  razorpayShortUrl?: string;
 }
 
 function toWords(n: number): string {
@@ -164,31 +161,7 @@ export default function InvoicePreview({ data }: { data: InvoicePreviewData }) {
         </div>
       </div>
 
-      {(data.includeRazorpayLink || data.razorpayShortUrl) && (
-        <div style={{ marginBottom: "2rem" }}>
-          <div style={{ fontSize: 14, fontWeight: 500, color: "#0F6E56", textTransform: "uppercase", letterSpacing: 0.8, borderBottom: "0.5px solid #e2e8f0", paddingBottom: 6, marginBottom: "1rem" }}>Pay Online</div>
-          <div style={{ background: "#E1F5EE", borderRadius: 8, padding: "1rem 1.25rem", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16 }}>
-            <div>
-              <div style={{ fontSize: 13, color: "#085041", fontWeight: 600 }}>Razorpay</div>
-              <div style={{ fontSize: 12, color: "#0F6E56", marginTop: 4, wordBreak: "break-all" }}>
-                {data.razorpayShortUrl || "Pay link will be generated when you save this invoice."}
-              </div>
-            </div>
-            {data.razorpayShortUrl && (
-              <a
-                href={data.razorpayShortUrl}
-                target="_blank"
-                rel="noreferrer"
-                style={{ background: "#0F6E56", color: "#fff", borderRadius: 8, padding: "10px 16px", fontSize: 13, fontWeight: 600, textDecoration: "none", whiteSpace: "nowrap" }}
-              >
-                Pay Now
-              </a>
-            )}
-          </div>
-        </div>
-      )}
-
-      {data.showBankDetails !== false && (
+      {/* Bank Details */}
       <div style={{ marginBottom: "2rem" }}>
         <div style={{ fontSize: 14, fontWeight: 500, color: "#0F6E56", textTransform: "uppercase", letterSpacing: 0.8, borderBottom: "0.5px solid #e2e8f0", paddingBottom: 6, marginBottom: "1rem" }}>Bank Details</div>
         <div style={{ background: "#f8fafc", borderRadius: 8, padding: "1rem 1.25rem" }}>
@@ -210,7 +183,6 @@ export default function InvoicePreview({ data }: { data: InvoicePreviewData }) {
           </table>
         </div>
       </div>
-      )}
 
       {/* Footer */}
       <div style={{ borderTop: "0.5px solid #e2e8f0", paddingTop: "1.5rem", textAlign: "center", fontSize: 12, color: "#888", lineHeight: 1.9 }}>

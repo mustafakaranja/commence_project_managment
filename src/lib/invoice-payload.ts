@@ -23,8 +23,6 @@ type InvoiceBody = {
   quoteId?: string | null;
   quoteNumber?: string;
   status?: string;
-  showBankDetails?: boolean;
-  includeRazorpayLink?: boolean;
 };
 
 export type InvoiceItem = {
@@ -50,14 +48,6 @@ export function parseInvoiceItems(body: InvoiceBody): InvoiceItem[] {
 
 export function invoiceSubtotal(items: InvoiceItem[]) {
   return Math.round(items.reduce((sum, row) => sum + (Number(row.amount) || 0), 0) * 100) / 100;
-}
-
-export function invoicePayableTotal(amount: number, taxAmount?: number) {
-  return Math.round(((Number(amount) || 0) + (Number(taxAmount) || 0)) * 100) / 100;
-}
-
-export function invoiceTotalPaise(amount: number, taxAmount?: number) {
-  return Math.round(invoicePayableTotal(amount, taxAmount) * 100);
 }
 
 export function validateInvoiceBody(body: InvoiceBody): string | null {
@@ -89,7 +79,5 @@ export function toInvoiceFields(body: InvoiceBody) {
     quoteId: body.quoteId || null,
     quoteNumber: body.quoteNumber ? String(body.quoteNumber) : "",
     status: normalizeInvoiceStatus(body.status),
-    showBankDetails: body.showBankDetails !== false,
-    includeRazorpayLink: Boolean(body.includeRazorpayLink),
   };
 }

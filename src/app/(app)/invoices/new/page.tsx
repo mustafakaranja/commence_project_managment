@@ -14,14 +14,12 @@ import InvoicePreview from "@/components/InvoicePreview";
 import InvoiceLineItems, { emptyInvoiceItem, type InvoiceItemRow } from "@/components/InvoiceLineItems";
 import { quoteFinancials } from "@/lib/quotation-payload";
 import { isSubscriptionQuote } from "@/lib/quotation-catalog";
-import InvoicePaymentToggles from "@/components/InvoicePaymentToggles";
 import { invoiceSubtotal, INVOICE_STATUSES } from "@/lib/invoice-payload";
-import { ArrowLeft, Save, Download, CheckCircle2, ListPlus, Link2 } from "lucide-react";
+import { ArrowLeft, Save, Download, CheckCircle2, ListPlus } from "lucide-react";
 import Link from "next/link";
 
 interface Client { _id: string; name: string; }
 interface SavedInvoice {
-  _id: string;
   invoiceNumber: string;
   clientName?: string;
   invoiceDate: string;
@@ -31,7 +29,6 @@ interface SavedInvoice {
   invoiceFor: string;
   items: { description: string; amount: number }[];
   quoteNumber?: string;
-  razorpayShortUrl?: string;
 }
 
 function NewInvoiceForm() {
@@ -43,7 +40,6 @@ function NewInvoiceForm() {
   const [error, setError] = useState("");
   const [savedInvoice, setSavedInvoice] = useState<SavedInvoice | null>(null);
   const [quoteHint, setQuoteHint] = useState("");
-  const [creatingLink, setCreatingLink] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
 
   const invoiceForParam = searchParams.get("invoiceFor") ?? "";
@@ -59,8 +55,6 @@ function NewInvoiceForm() {
     quoteId: quoteIdParam ?? "",
     quoteNumber: "",
     status: "Draft",
-    showBankDetails: true,
-    includeRazorpayLink: false,
   });
 
   useEffect(() => {
@@ -132,9 +126,6 @@ function NewInvoiceForm() {
     invoiceFor: form.invoiceFor,
     items: parsedItems,
     quoteNumber: form.quoteNumber || undefined,
-    showBankDetails: form.showBankDetails,
-    includeRazorpayLink: form.includeRazorpayLink,
-    razorpayShortUrl: savedInvoice?.razorpayShortUrl,
   }), [savedInvoice, selectedClient, form, subtotal, tax, parsedItems]);
 
   const handlePrint = useReactToPrint({
@@ -173,15 +164,12 @@ function NewInvoiceForm() {
         quoteId: form.quoteId || null,
         quoteNumber: form.quoteNumber || "",
         status: form.status,
-        showBankDetails: form.showBankDetails,
-        includeRazorpayLink: form.includeRazorpayLink,
       }),
     });
     setSaving(false);
     if (res.ok) {
       const inv = await res.json();
       setSavedInvoice({
-        _id: inv._id,
         invoiceNumber: inv.invoiceNumber,
         clientName: selectedClient?.name,
         invoiceDate: form.invoiceDate,
@@ -191,31 +179,11 @@ function NewInvoiceForm() {
         invoiceFor: form.invoiceFor,
         items: parsedItems,
         quoteNumber: form.quoteNumber,
-        razorpayShortUrl: inv.razorpayShortUrl,
       });
-      if (inv.payLinkError) setError(inv.payLinkError);
     } else {
       const d = await res.json();
       setError(d.error ?? "Failed to save invoice.");
     }
-  };
-
-  const createPayLink = async () => {
-    if (!savedInvoice?._id) return;
-    setError("");
-    setCreatingLink(true);
-    const res = await fetch(`/api/invoices/${savedInvoice._id}/pay-link`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
-    });
-    const payload = await res.json().catch(() => ({}));
-    setCreatingLink(false);
-    if (!res.ok) {
-      setError(payload.error ?? "Failed to create Razorpay pay link.");
-      return;
-    }
-    setSavedInvoice((prev) => prev ? { ...prev, razorpayShortUrl: payload.payUrl } : prev);
   };
 
   return (
@@ -245,34 +213,10 @@ function NewInvoiceForm() {
               </p>
             </div>
             <div className="flex flex-col gap-2 w-full">
-              {savedInvoice.razorpayShortUrl ? (
-                <Button
-                  className="w-full bg-[#0F6E56] hover:bg-[#0d5e49]"
-                  onClick={() => window.open(savedInvoice.razorpayShortUrl, "_blank")}
-                >
-                  <Link2 className="w-4 h-4 mr-2" />
-                  Open Razorpay Pay Link
-                </Button>
-              ) : (
-                <Button
-                  className="w-full bg-[#0F6E56] hover:bg-[#0d5e49]"
-                  onClick={createPayLink}
-                  disabled={creatingLink}
-                >
-                  <Link2 className="w-4 h-4 mr-2" />
-                  {creatingLink ? "Creating pay link…" : "Generate Razorpay Pay Link"}
-                </Button>
-              )}
-              <Button onClick={() => handlePrint()} variant="outline" className="w-full">
+              <Button onClick={() => handlePrint()} className="w-full bg-[#0F6E56] hover:bg-[#0d5e49]">
                 <Download className="w-4 h-4 mr-2" />
                 Download as PDF
               </Button>
-              {error && (
-                <p className="text-sm text-red-500 bg-red-50 border border-red-200 rounded px-3 py-2">{error}</p>
-              )}
-              {savedInvoice.razorpayShortUrl && (
-                <p className="text-xs text-gray-500 break-all">{savedInvoice.razorpayShortUrl}</p>
-              )}
               <Button variant="outline" className="w-full" onClick={() => router.push("/invoices/new")}>
                 <ListPlus className="w-4 h-4 mr-2" />
                 Create Another
@@ -371,12 +315,6 @@ function NewInvoiceForm() {
                 </SelectContent>
               </Select>
             </div>
-
-            <InvoicePaymentToggles
-              showBankDetails={form.showBankDetails}
-              includeRazorpayLink={form.includeRazorpayLink}
-              onChange={(next) => setForm({ ...form, ...next })}
-            />
 
             {error && (
               <p className="text-sm text-red-500 bg-red-50 border border-red-200 rounded px-3 py-2">{error}</p>

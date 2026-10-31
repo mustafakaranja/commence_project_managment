@@ -17,12 +17,6 @@ export interface IInvoice extends Document {
   quoteId?: Types.ObjectId | null;
   quoteNumber?: string;
   status: string;
-  showBankDetails?: boolean;
-  includeRazorpayLink?: boolean;
-  razorpayPaymentLinkId?: string;
-  razorpayShortUrl?: string;
-  razorpayPaymentStatus?: string;
-  razorpayPaymentId?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -48,12 +42,6 @@ const InvoiceSchema = new Schema<IInvoice>(
     quoteId: { type: Schema.Types.ObjectId, ref: "Quotation", default: null },
     quoteNumber: { type: String, default: "" },
     status: { type: String, enum: ["Draft", "Unpaid", "Paid", "Close"], default: "Draft" },
-    showBankDetails: { type: Boolean, default: true },
-    includeRazorpayLink: { type: Boolean, default: false },
-    razorpayPaymentLinkId: { type: String, default: "" },
-    razorpayShortUrl: { type: String, default: "" },
-    razorpayPaymentStatus: { type: String, default: "" },
-    razorpayPaymentId: { type: String, default: "" },
   },
   { timestamps: true }
 );
